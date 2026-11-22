@@ -58,14 +58,70 @@ class OccupancyWireTest {
         OccupancyWire.write(reading, plain)
         assertEquals(reading, OccupancyWire.read(plain))
         // A band past cold.
-        plain.copyOf().also { it[3] = (3 shl 6).toByte() }.let { assertNull(OccupancyWire.read(it)) }
+        plain.copyOf().also { it[OccupancyWire.HEADER_BYTES] = (3 shl 6).toByte() }.let { assertNull(OccupancyWire.read(it)) }
         // A kind nobody sends.
-        plain.copyOf().also { it[0] = 3 }.let { assertNull(OccupancyWire.read(it)) }
+        plain.copyOf().also { it[0] = 4 }.let { assertNull(OccupancyWire.read(it)) }
         // A byte past the rooms.
         plain.copyOf().also { it[OccupancyWire.PLAIN_BYTES - 1] = 1 }.let { assertNull(OccupancyWire.read(it)) }
         // An outline on the couch's.
         ByteArray(OccupancyWire.PLAIN_BYTES).also { OccupancyWire.write(couch, it); it[1] = 1 }.let { assertNull(OccupancyWire.read(it)) }
         // Nothing with anything in it.
         ByteArray(OccupancyWire.PLAIN_BYTES).also { it[2] = 1 }.let { assertNull(OccupancyWire.read(it)) }
+        ByteArray(OccupancyWire.PLAIN_BYTES).also { it[4] = 1 }.let { assertNull(OccupancyWire.read(it)) }
+        // A reading claiming a playback's bytes, or more history than two minutes holds.
+        plain.copyOf().also { it[6] = 1 }.let { assertNull(OccupancyWire.read(it)) }
+        plain.copyOf().also { it[4] = (OccupancyWire.MOST_FRAMES + 1).toByte() }.let { assertNull(OccupancyWire.read(it)) }
+    }
+
+    // ---- D-319: the timelapse rides the same field, at the same width ---------------------------
+
+    private val ready = OccupancyBeat.terminal(here = 0, views = listOf(ObservationView("KITCHEN", 2, 0)), readyIn = 74, history = 41)
+
+    private val playing = OccupancyBeat.lapse(
+        here = 2, frames = 60, first = 27,
+        counts = listOf(listOf(1, 0, 2, 0), listOf(9, 9, 9, 9), listOf(0, 1, 2, 3)),
+        jammed = listOf(false, true, false),
+    )
+
+    @Test
+    fun `a reading carries the station's readiness and a playback carries three frames one width for all`() {
+        for (beat in listOf(ready, playing, OccupancyBeat.lapse(-1, 1, 0, listOf(listOf(0)), listOf(false)))) {
+            val field = OccupancyWire.pack(seed, nonce, beat)
+            assertEquals(OccupancyWire.CHARS, field.length, "$beat sealed to another width")
+            assertEquals(beat, OccupancyWire.unpack(seed, field), "$beat did not open to itself")
+        }
+        val opened = OccupancyWire.unpack(seed, OccupancyWire.pack(seed, nonce, ready)) as OccupancyBeat.Terminal
+        assertEquals(74, opened.readyIn)
+        assertEquals(41, opened.history)
+        val lapse = OccupancyWire.unpack(seed, OccupancyWire.pack(seed, nonce, playing)) as OccupancyBeat.Lapse
+        assertEquals(listOf(listOf(1, 0, 2, 0), listOf(0, 0, 0, 0), listOf(0, 1, 2, 3)), lapse.counts, "a jammed frame carried what was inside it")
+        assertEquals(listOf(false, true, false), lapse.jammed)
+        assertEquals(27, lapse.first)
+        assertEquals(60, lapse.frames)
+        assertEquals(2, lapse.here)
+        // Every kind is the same width, the widest the field ever has to be: a full beat of a playback
+        // of a home with every room the field carries.
+        val widest = OccupancyBeat.lapse(0, 60, 57, List(3) { List(OccupancyWire.MAX_ROOMS) { 5 } }, listOf(false, false, false))
+        assertEquals(OccupancyWire.CHARS, OccupancyWire.pack(seed, nonce, widest).length)
+        assertEquals(widest, OccupancyWire.unpack(seed, OccupancyWire.pack(seed, nonce, widest)))
+    }
+
+    @Test
+    fun `a playback field that is not exactly one reads as nothing drawn`() {
+        val plain = ByteArray(OccupancyWire.PLAIN_BYTES)
+        OccupancyWire.write(playing, plain)
+        assertEquals(playing, OccupancyWire.read(plain))
+        // A jammed frame with a count in it.
+        plain.copyOf().also { it[OccupancyWire.HEADER_BYTES + 4] = 1 }.let { assertNull(OccupancyWire.read(it)) }
+        // Frames past the playback's end, none, or more than a beat carries.
+        plain.copyOf().also { it[5] = 58 }.let { assertNull(OccupancyWire.read(it)) }
+        plain.copyOf().also { it[6] = 0 }.let { assertNull(OccupancyWire.read(it)) }
+        plain.copyOf().also { it[6] = 4 }.let { assertNull(OccupancyWire.read(it)) }
+        // A jam bit for a frame not carried, and a READY IN on a playback.
+        plain.copyOf().also { it[7] = 0b1000 }.let { assertNull(OccupancyWire.read(it)) }
+        plain.copyOf().also { it[3] = 1 }.let { assertNull(OccupancyWire.read(it)) }
+        // A band on a playback's count, and a byte past the frames.
+        plain.copyOf().also { it[OccupancyWire.HEADER_BYTES] = (1 shl 6).toByte() }.let { assertNull(OccupancyWire.read(it)) }
+        plain.copyOf().also { it[OccupancyWire.HEADER_BYTES + 3 * 4] = 1 }.let { assertNull(OccupancyWire.read(it)) }
     }
 }

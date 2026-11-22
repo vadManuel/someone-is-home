@@ -158,8 +158,15 @@ object EmitSchema {
     val TERMINAL_READING = MessageKind("TerminalReading")
     val TRUE_OCCUPANCY = MessageKind("TrueOccupancy")
 
-    /** The two kinds above: rows with no effect behind them, for a sweep over [kindOf] to leave out. */
-    val BEAT_KINDS: List<MessageKind> = listOf(TERMINAL_READING, TRUE_OCCUPANCY)
+    /**
+     * **The third beat kind: the timelapse playing, to its reader** (D-319). [TERMINAL_READING]'s
+     * shape: no effect carries it, the beat asks [permits] before it fills the field with a playback,
+     * and with no row every reader's playback is the empty frame.
+     */
+    val TIMELAPSE_PLAYBACK = MessageKind("TimelapsePlayback")
+
+    /** The kinds above: rows with no effect behind them, for a sweep over [kindOf] to leave out. */
+    val BEAT_KINDS: List<MessageKind> = listOf(TERMINAL_READING, TRUE_OCCUPANCY, TIMELAPSE_PLAYBACK)
     val CONTACT_SEED_ISSUED = MessageKind("ContactSeedIssued")
     val MEETING_OPENED = MessageKind("MeetingOpened")
     val MEETING_CALLING = MessageKind("MeetingCalling")
@@ -449,6 +456,15 @@ object EmitSchema {
         TRUE_OCCUPANCY to setOf(
             ClientClass(Role.Resident, RoundState.Out),
             ClientClass(Role.Insider, RoundState.Out),
+        ),
+        // **The timelapse playing, both living classes, for TERMINAL_READING's reason, and never
+        // narrowed to one** (D-319). The station's history plays for either role on the same terms;
+        // a row of `Resident/Live` would be an Insider whose every playback was empty. The beat fills
+        // it for the seat whose playback is running, which holds the station, and for nobody else.
+        // Its frames are bare counts the house reported, read through `ObservationView`.
+        TIMELAPSE_PLAYBACK to setOf(
+            ClientClass(Role.Resident, RoundState.Live),
+            ClientClass(Role.Insider, RoundState.Live),
         ),
 
         // **Both living classes, for SCAN_ANSWERED's reason, and it is the other half of D-124**

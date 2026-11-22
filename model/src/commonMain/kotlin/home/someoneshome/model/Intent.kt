@@ -100,6 +100,12 @@ sealed interface Intent {
      */
     data class LeaveTerminal(val actor: Seat) : Intent
 
+    /** **This phone's reader asked for the timelapse** (D-319). The actor and nothing else. */
+    data class PlayTimelapse(val actor: Seat) : Intent
+
+    /** **This phone's reader stopped the playback** (D-319). The actor and nothing else. */
+    data class StopTimelapse(val actor: Seat) : Intent
+
     /**
      * **One participant's taps on the Sync Pulse, handed over** (`gdd.md:355`,
      * [Event.SyncPulseReturned]).

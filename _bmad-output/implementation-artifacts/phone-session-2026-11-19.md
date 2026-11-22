@@ -128,8 +128,10 @@ Tick each line as you see it.
 - [ ] **Surge** on another phone: its lamp slams bright, goes dark, reboots, and any open
       Subroutine is lost. **No sound plays**, by ruling: the game makes none (D-320), and **no tap does anything** during the
       whole sequence, STOP NOW included (D-182, D-313).
-- [ ] **Static**: expect it to show only to someone at the Terminal. Nobody else is told yet
-      (D-186; not built).
+- [ ] **Static**: the Terminal's reader sees the noise over the plan, and **every living phone**
+      gets a quiet banner, **MONITORING JAMMED**, over whatever it is showing: no dim, no buzz, and
+      the phone stays where it was (the reader stays at the Terminal). It stands until swiped and is
+      kept in the house's messages. A phone on the couch gets nothing (D-186, D-319).
 - [ ] **The Terminal and the couch show the home with counts** (D-316): every phone gets the
       plan at LIGHTS OUT. Scan T: within a second the home's own rooms appear with a number in each,
       the station's room outlined, the station's storey on the strip, bright where somebody performed
@@ -137,8 +139,20 @@ Tick each line as you see it.
       T: the counts go. Another phone scanning T meanwhile gets ONE READER AT A TIME and no counts.
       On the couch (after the meeting that follows a Revoke): the same plan, every count in full
       ink, no outline, live; a Static changes nothing there. Note how close the counts come to who is
-      really where: bleed into the next room and a missed person are the design. The timelapse is
-      still the empty frame (not built). A home of two storeys shows only the first on the couch.
+      really where: bleed into the next room and a missed person are the design.
+- [ ] **Every storey** (D-319): on a home of two storeys, tap the other floor on the strip at the
+      Terminal and on the couch. Its rooms and counts appear at once; tap back. The Terminal opens on
+      the station's storey and the couch on the first, each time they are opened.
+- [ ] **The timelapse** (D-319): at T after a minute or so, TIMELAPSE reads `TIMELAPSE . m:ss AT
+      6X` with the history it holds (2:00 once the shift is two minutes old). Press it: within a
+      second the playback opens, oldest to newest, a frame every third of a second, the counts in one
+      dim ink, the header counting toward the present. It plays once and returns to the live view.
+      Then TIMELAPSE is dimmed and reads `TIMELAPSE . READY IN m:ss`, counting down; walk away and let
+      another phone scan T: it shows the same wait (the cooldown is the station's). STOP THE PLAYBACK
+      partway: the wait is shorter by the share not watched. A Static during the history plays back as
+      about 1.7 s of noise with no counts. After a meeting the history starts again from nothing, and
+      the button is ready once it holds a frame, two seconds after the meeting ends, whatever the
+      wait was before. Nobody but the reader is shown a frame.
 - [ ] **The meeting ring** on a real phone: LONG, pause, LONG, repeating until answered, felt in a
       pocket and heard by nobody (D-160).
 - [ ] **Meeting light**: does the room go bright together at the call and back to dim together at

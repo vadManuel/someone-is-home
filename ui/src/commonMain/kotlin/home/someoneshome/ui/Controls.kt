@@ -165,6 +165,12 @@ class PanelActions(
     val fireSurge: (Int) -> Unit = {},
     val fireIsolate: (String) -> Unit = {},
     val fireStatic: () -> Unit = {},
+    /**
+     * **TIMELAPSE and the floor strip** (D-319). The first asks the house for a playback and walks
+     * nowhere until the house's frames arrive; the second is input echo, choosing the storey drawn.
+     */
+    val playTimelapse: () -> Unit = {},
+    val showStorey: (Int) -> Unit = {},
     val toggleMarkers: () -> Unit = {},
     val toggleTorch: () -> Unit = {},
     val pickRoomType: (RoomKind) -> Unit = {},

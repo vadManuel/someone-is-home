@@ -273,6 +273,24 @@ sealed interface Event {
      */
     data class TerminalLeft(override val at: Tick, val actor: Seat) : Event
 
+    /**
+     * **The reader asked the station to play its history** (D-319; `gdd.md`'s timelapse table).
+     *
+     * The actor and nothing else, for [TerminalLeft]'s reason. The rules start a playback when the
+     * actor holds the station, nothing is playing, the station's cooldown has run and there is history
+     * to play; otherwise it changes nothing. **It emits nothing either way** (rule 1): what the reader
+     * is shown is the beat sealed into the upload's answer, and an answer that differed by whether a
+     * playback began would be the only one that did.
+     */
+    data class TimelapsePlayed(override val at: Tick, val actor: Seat) : Event
+
+    /**
+     * **The reader stopped the playback early** (D-319). The station's cooldown is cut linearly by the
+     * fraction unwatched (`gdd.md`'s table). From a seat not playing, or after the playback has
+     * played out, it changes nothing, and it emits nothing either way.
+     */
+    data class TimelapseStopped(override val at: Tick, val actor: Seat) : Event
+
     /** Armed, not fired. The cooldown starts here — a botched stalk costs a full cooldown. */
     data class RevokeArmed(override val at: Tick, val actor: Seat) : Event
 

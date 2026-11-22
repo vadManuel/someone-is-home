@@ -7,7 +7,10 @@ import home.someoneshome.model.RoomKind
 import home.someoneshome.model.clientClassOf
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
+import home.someoneshome.model.Timelapse
 import home.someoneshome.model.protocol.OccupancyBeat
+import home.someoneshome.model.protocol.OccupancyWire
+import home.someoneshome.model.Balance
 import home.someoneshome.model.toView
 
 /*
@@ -48,6 +51,14 @@ import home.someoneshome.model.toView
  *
  * **Static changes neither** (D-186): tracking is untouched, so the reader's beat keeps carrying the
  * real counts under the jam, and the phone draws the noise over them; the couch is exempt.
+ *
+ * ### The timelapse (D-319)
+ *
+ * While the reader's playback runs, the reader is sent **its frames instead of the live view**
+ * (*watching blinds you to the present*, the GDD), [OccupancyWire.LAPSE_FRAMES] a beat from the
+ * frame showing now, if `EmitSchema` permits `TIMELAPSE_PLAYBACK` to its class. Otherwise a reading
+ * also says when the station may next play and how much history it holds. Only the reader is sent
+ * either: the playback is the reader's, and the reader holds the station.
  */
 fun occupancyBeat(state: GameState, seat: Seat, at: Tick): OccupancyBeat {
     val running = state.armed && !state.ended && state.meeting == null && state.isSeated(seat)
@@ -56,11 +67,49 @@ fun occupancyBeat(state: GameState, seat: Seat, at: Tick): OccupancyBeat {
         EmitSchema.permits(EmitSchema.TERMINAL_READING, clientClass)
     val onTheCouch = running && state.isOut(seat) && state.newlyRevoked.none { it.index == seat.index } &&
         EmitSchema.permits(EmitSchema.TRUE_OCCUPANCY, clientClass)
+    val playing = state.timelapse.playingAt(at)?.takeIf { reads && it.reader.index == seat.index }
     return when {
+        // **Watching the past blinds you to the present** (the GDD): a reader whose playback runs is
+        // sent its frames and never the live view, and with no `TIMELAPSE_PLAYBACK` row it is sent
+        // nothing at all, the fail-closed direction (rule 2).
+        playing != null ->
+            if (EmitSchema.permits(EmitSchema.TIMELAPSE_PLAYBACK, clientClass)) lapseFrames(state, playing, at) else OccupancyBeat.Nothing
         reads -> terminalReading(state, at)
         onTheCouch -> trueOccupancy(state, at)
         else -> OccupancyBeat.Nothing
     }
+}
+
+/**
+ * **The reader's playback this beat** (D-319): the frame showing at [at] and the next ones, up to
+ * [OccupancyWire.LAPSE_FRAMES], oldest to newest. The phone shows them a third of a second apart.
+ */
+internal fun lapseFrames(state: GameState, playing: home.someoneshome.model.Playback, at: Tick): OccupancyBeat.Lapse {
+    val frames = playing.frames
+    val first = playing.frameAt(at).coerceAtMost(frames.size - 1)
+    val last = minOf(frames.size, first + OccupancyWire.LAPSE_FRAMES)
+    val counts = ArrayList<List<Int>>(last - first)
+    val jammed = ArrayList<Boolean>(last - first)
+    for (i in first until last) {
+        counts += frames[i].counts
+        jammed += frames[i].jammed
+    }
+    val here = state.terminalRoom?.let { state.plan.indexOf(it) } ?: -1
+    return OccupancyBeat.lapse(here, frames.size, first, counts, jammed)
+}
+
+/**
+ * **When the station may next play, in whole seconds, and the history it holds now** (D-319). Ready
+ * is the station's cooldown run out **and** history to play; while there is none, the wait is for
+ * its first frame.
+ */
+internal fun timelapseReadiness(state: GameState, at: Tick): Pair<Int, Int> {
+    val held = Timelapse.framesHeld(state.shiftStartedAt, at)
+    val cooling = state.timelapse.readyAt.step - at.step
+    // The first frame is the mark two seconds into the shift, held from the tick after it.
+    val firstFrame = if (held > 0) 0L else state.shiftStartedAt.step + Timelapse.FRAME_EVERY + 1 - at.step
+    val wait = maxOf(cooling, firstFrame, 0L)
+    return Balance.wholeSeconds(wait) to held
 }
 
 /** **The reader's beat**: per room in plan order, the latest capture this shift as its view, or a hole. */
@@ -72,7 +121,8 @@ internal fun terminalReading(state: GameState, at: Tick): OccupancyBeat.Terminal
         views += held?.takeIf { it.seenAt >= state.shiftStartedAt }?.toView(at)
     }
     val here = state.terminalRoom?.let { plan.indexOf(it) } ?: -1
-    return OccupancyBeat.terminal(here, views)
+    val (readyIn, history) = timelapseReadiness(state, at)
+    return OccupancyBeat.terminal(here, views, readyIn, history)
 }
 
 /** **The couch's beat**: per room in plan order, the living seats the house places there now. */

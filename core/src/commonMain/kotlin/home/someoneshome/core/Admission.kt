@@ -279,6 +279,8 @@ private fun firedBy(event: Event): Seat? = when (event) {
     is Event.VoteSelected, is Event.VoteLocked, is Event.VoteWindowClosed,
     is Event.TallyHalfwayReached, is Event.MeetingClosed,
     is Event.SyncPulseReturned, is Event.EgressExpired, is Event.TerminalLeft,
+    // The station's timelapse is open to either role on the same terms (D-319), never an ability.
+    is Event.TimelapsePlayed, is Event.TimelapseStopped,
     // The radio's conclusion, like ContactMade: a fact the house is told, never an ability.
     is Event.Sensed,
     // The house's own fact about its own air, never an ability.
@@ -323,6 +325,11 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     // drops at a meeting has dropped all the same. The call has already freed the station, so at a
     // meeting this changes nothing -- which is the harmless direction.
     is Event.TerminalLeft -> null
+
+    // Not meeting events, and not refused at one, for [Event.TerminalLeft]'s reason (D-319): the
+    // call has already freed the station and ended any playback, so at a meeting the rules find no
+    // reader and change nothing, which is the harmless direction.
+    is Event.TimelapsePlayed, is Event.TimelapseStopped -> null
 
     // Not a meeting event. Refused at a meeting outright, above, rather than by a phase here.
     is Event.Sensed -> null
@@ -370,6 +377,7 @@ private fun isTierTwo(event: Event): Boolean = when (event) {
     is Event.VoteWindowClosed, is Event.TallyHalfwayReached, is Event.MeetingClosed,
     is Event.EgressFired, is Event.SyncPulseReturned, is Event.EgressExpired,
     is Event.TerminalLeft, is Event.Sensed, is Event.OffAirEnded, is Event.HouseClosedOnPermission,
+    is Event.TimelapsePlayed, is Event.TimelapseStopped,
     -> false
 }
 
@@ -403,6 +411,8 @@ private fun needsEgress(event: Event): Boolean = when (event) {
     // nothing here for it to need, and a gate would refuse every Static in every quiet round.
     is Event.StaticFired,
     is Event.TerminalLeft,
+    // The station plays its history whether or not the house is on fire (D-319).
+    is Event.TimelapsePlayed, is Event.TimelapseStopped,
     // The map is sensed whether or not the house is on fire.
     is Event.Sensed,
     // **The house's return reads the Egress and does not need one.** A lock with no Egress running

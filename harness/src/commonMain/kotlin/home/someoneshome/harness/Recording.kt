@@ -57,6 +57,14 @@ class Recording(
         // loses `sound=`: the game makes no sound, and the effect no longer carries one. A version
         // 48 recording's rows cannot be compared with what this build emits, so it is refused here
         // as every older one is. No event or state row moved.
+        // 49: the Terminal's timelapse (the owner's 2026-11-21 rulings, D-319). Two events a version
+        // 48 build cannot construct, `TimelapsePlayed` and `TimelapseStopped` (`actor=`), the
+        // reader's TIMELAPSE and STOP THE PLAYBACK; and the state row gains `timelapse=`: the
+        // station's history (a frame every two seconds of the shift, bare counts and the jam), the
+        // playback running and the station's cooldown. The frames are taken by the rules from the
+        // recorded state at each mark, so what the reader was shown at a tick is still `occupancyBeat`
+        // of the recorded state at that tick, and the beats are still not recorded. A version 48
+        // recording has no row for any of it and is refused here as every older one is.
         //
         // 48: two changes built in parallel and integrated together, each of which alone was 47.
         // The home's plan goes to every seat at arming (D-316): a new effect, `PlanIssued`, one per

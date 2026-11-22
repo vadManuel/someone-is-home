@@ -494,6 +494,7 @@ Viewing is treated as an **uncompletable Subroutine**, so the motion budget appl
 > A dot implies a trackable individual, and no such thing exists in this system. You learn that *four people* were in the living room, never which four — and a numeral says exactly that and nothing more.
 
 - **Your own room is outlined** as the anchor. Without one the map is unreadable; with one you can subtract yourself and reason about the remainder. Only you see your own outline.
+- **Every storey, by tapping the floor strip** (D-319). There is one Terminal in the whole home, so the strip switches the storey drawn; it opens on the station's own. Every storey's counts are already sent.
 - **Counts dim through three staleness bands** (fresh / stale / cold). Sensing only fires when someone scans, so a count may have data at 5s and 47s and nothing between. Holding it flat would imply certainty we do not have.
 - **Bands, not a continuous gradient** — a smooth fade implies second-level precision the data does not have. **Jitter the age before bucketing**, signed, **rolled once per observation and stored**, so band boundaries cannot be used to read exact scan timing and counts do not flicker between bands at render time.
 - **Stairs are transit zones — drawn, never counted.**
@@ -506,7 +507,7 @@ Viewing is treated as an **uncompletable Subroutine**, so the motion budget appl
 - **Roll once at capture, never re-roll.** If the same moment renders differently on successive viewings, players stop trusting the system.
 - **Identical error rates for both roles.** Any asymmetry makes the map an alignment oracle by statistics.
 
-**Static jams the live view for ten seconds (D-186).** The surface drowns in **animated noise with the real counts faintly beneath it** — *virtually impossible* to parse rather than merely degraded. Underneath, **nothing changes**: tracking keeps recording the truth, check-ins land, System Integrity moves, and the view is correct again the instant the window closes. **It is deliberately distinguishable from a disconnection**, so a reader knows they were jammed rather than that the station broke, and the house announces *that* it happened to the whole building and never who did it. **Ghosts never see it** — the couch's true occupancy is outside the system and stays clean.
+**Static jams the live view for ten seconds (D-186).** The surface drowns in **animated noise with the real counts faintly beneath it** — *virtually impossible* to parse rather than merely degraded. Underneath, **nothing changes**: tracking keeps recording the truth, check-ins land, System Integrity moves, and the view is correct again the instant the window closes. **It is deliberately distinguishable from a disconnection**, so a reader knows they were jammed rather than that the station broke, and the house announces *that* it happened to the whole building and never who did it — *(built, D-319: a quiet `MONITORING JAMMED` banner on every living phone, the house's quiet notification, no dim and no buzz)*. **Ghosts never see it** — the couch's true occupancy is outside the system and stays clean.
 
 > **The reader learns the most useful thing available and cannot act on it.** You know an Insider did something in the last ten seconds, you know you were standing at the station when they decided to, and you have no idea which of them it was — which is exactly the evidence texture the rest of this system is built for.
 
@@ -521,6 +522,11 @@ Viewing is treated as an **uncompletable Subroutine**, so the motion budget appl
 | Early cancel | Allowed. Reduces cooldown **linearly** by the fraction unwatched |
 | Playback order | **Oldest → newest** |
 | Floor | Start of round, or **end of the last meeting**, whichever is later |
+| Cooldown holder | **The station's.** The next reader inherits it (D-319) |
+| Frames | **Bare counts**, no staleness shading, snapshotted **every 2 s** of real time: 60 for a full 2:00, each shown for **⅓ s** at 6×. They switch, never tween (D-319, superseding F-008's count-up) |
+| While it cannot play | Cooling down, or no history yet: the button is **dimmed** and reads `TIMELAPSE . READY IN m:ss` (D-319) |
+| A meeting | Ends the playback. **Not** an early cancel; after it the cooldown equals the new, tiny history (D-319) |
+| Who is sent the frames | **The reader alone**, in the same fixed-width sealed field as the live counts, and the live view is not sent while it plays (D-319) |
 
 **Standing rule: `timelapse cooldown == timelapse history duration`.** The cooldown therefore scales down to available history — right after a meeting only seconds of history exist, so the cooldown shrinks to match. Without this there would be a blind zone post-meeting where the station is simultaneously near-useless *and* on full cooldown.
 
@@ -528,7 +534,7 @@ Viewing is treated as an **uncompletable Subroutine**, so the motion budget appl
 
 **Oldest→newest is load-bearing.** Newest-first would hand you the freshest data at a discount when you cancel, inverting the tradeoff. Chronological means bailing at 10s costs you the most recent 60 seconds — the part you actually wanted. Its real use is an **escape hatch**: you sense someone approaching, you bail, and the reduced cooldown means bailing is not a write-off.
 
-**A playback crossing a Static window renders those seconds as static (D-186).** At 6× a ten-second jam is **~1.7 seconds of noise** in the middle of a twenty-second playback. **The live cover is the product; the playback gap is a forensic trace** — it says *something was hidden here, at this time*, and says nothing about what or by whom. A player who watches it back learns the window and nothing inside it, which is the Terminal's whole tragedy given a second edge: watching the past to find out what you were stopped from seeing in the present.
+**A playback crossing a Static window renders those seconds as static (D-186).** *(Built, D-319: a frame taken while the house was jammed holds nothing but the jam, and plays as Static's noise with no counts under it.)* At 6× a ten-second jam is **~1.7 seconds of noise** in the middle of a twenty-second playback. **The live cover is the product; the playback gap is a forensic trace** — it says *something was hidden here, at this time*, and says nothing about what or by whom. A player who watches it back learns the window and nothing inside it, which is the Terminal's whole tragedy given a second edge: watching the past to find out what you were stopped from seeing in the present.
 
 **The floor rule wipes history at meeting end**, making each inter-meeting period a self-contained investigation. Information must be *used* at the meeting it was gathered for, or lost forever. **Emergent consequence: Insiders can call a meeting to destroy unwatched evidence.** Probabilistic rather than deterministic — build around it, do not patch it.
 
@@ -557,7 +563,7 @@ Viewing is treated as an **uncompletable Subroutine**, so the motion budget appl
 **So ghosts get what the whole house is denied:**
 
 - **Both bars, as exact percentages** — Resident System Integrity *and* the Egress's progress. Living phones see the Egress as a countdown and a draining bar; the couch reads the exact number behind it (owner ruling Q3, 2026-11-18).
-- **True occupancy** — live, every storey, no injected error, no staleness bands. **Still counts, never identities.** (built by D-316; the couch draws one storey of a home with two or more until the couch has a design for every storey)
+- **True occupancy** — live, every storey, no injected error, no staleness bands. **Still counts, never identities.** (built by D-316; every storey by tapping the floor strip, which opens on the first, D-319)
 - **Not alignments.** The tools to deduce, never the answer. A ghost is still solving, from outside.
 
 **No channel of any kind.** Cannot act, cannot speak, cannot vote, and **cannot message other ghosts.** Several people watch the same truth side by side, unable to share one thought about it.
@@ -1017,7 +1023,7 @@ The revoked player's device goes dark and inert **to them** — but **the radio 
 >
 > **Proposed resolution:** **false negatives must do more work under counts than they did under dots.** Specifically: hold a room's last count for a few seconds after loss of detection so brief dropouts do not read as decrements, and bias injected error toward *under*-counting occupied rooms rather than symmetric noise. This is a tuning consequence of the dots→counts change and it was not carried across when the change was made. **Re-verify the whole staleness-leak analysis against counts before building it.**
 
-> **`DECIDED HERE` F-008 — the dot-interpolation decision is defunct.** The design specified animating a dot sliding from room A to room B to turn 6× teleporting into legible motion. **Under counts there is nothing to interpolate** — a numeral changes from 3 to 2. Delete the requirement. The legibility problem it solved returns in a different form (numerals flickering at 6×) and should be solved by **counting-up/down animation on the numeral itself**, which is cheaper.
+> **`DECIDED HERE` F-008 — the dot-interpolation decision is defunct.** The design specified animating a dot sliding from room A to room B to turn 6× teleporting into legible motion. **Under counts there is nothing to interpolate** — a numeral changes from 3 to 2. Delete the requirement. The legibility problem it solved returns in a different form (numerals flickering at 6×) and should be solved by **counting-up/down animation on the numeral itself**, which is cheaper. *(Superseded, D-319: frames switch instantly with no tweening, because rule 5 permits no animation the house did not emit.)*
 
 > **`RESOLVED` F-009 — the Egress timer is a win condition with no number.** Traced against travel: two Residents must read the node names off the widget, cross the house at ~25s per marker hop, reach two *separate* markers, and pair on a Sync Pulse. **60–90s of travel alone** in a mid-sized house, before any tapping — and no number was ever set.
 >
@@ -1141,7 +1147,7 @@ Chain membership is exposed here and nowhere else. **There is no round replay** 
 | F-005 | GAP | **System Integrity 32 vs 42 assigned subroutines** | **Closed (D-129, D-130, D-146).** The meter scales with seats, order length is `K` from public facts, nothing auto-satisfies |
 | F-006 | GAP | Egress widget takeover costs a stale number, not a live one | Proposed: keep meetings-only, restate the value honestly |
 | F-007 | GAP | Counts decrement unambiguously where dots faded | Proposed: false negatives must work harder; re-verify the leak analysis |
-| F-008 | DECIDED | Dot interpolation is defunct under counts | Delete; animate the numeral instead |
+| F-008 | DECIDED | Dot interpolation is defunct under counts | Delete; frames switch with no count-up (D-319 supersedes *animate the numeral*) |
 | F-009 | RESOLVED | Egress timer never numbered | **Lobby setting, 120s default.** Host-tuned, because house size varies more than a default can |
 | F-010 | CONTRADICTION | Surge stairs-suppression is unimplementable; the lamp-raise is device-local and cheaper than first stated | **Deferred (OI-1).** Four surviving mitigations carry v1; revisit before public launch |
 | F-011 | DISSOLVED | The finding assumed revoked phones stop advertising. That is a rendering rule, not a radio rule | **Closed.** Report is verifiable by contact; both triggers survive; rule unamended |

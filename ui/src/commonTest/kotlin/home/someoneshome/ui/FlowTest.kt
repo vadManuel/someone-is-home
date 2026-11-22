@@ -10,6 +10,11 @@ import home.someoneshome.model.MarkerCard
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.RoomKind
+import home.someoneshome.model.HomePlanView
+import home.someoneshome.model.StoreyView
+import home.someoneshome.model.RoomView
+import home.someoneshome.model.protocol.OccupancyBeat
+import home.someoneshome.model.protocol.RoundMessage
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -845,6 +850,15 @@ class FlowTest {
         gone.leaveLobby()
         assertEquals(Flow.viaActions.getValue(ScreenId.Disconnect), setOf(gone.state.screen))
 
+        // **TIMELAPSE** (D-319): the press asks the house and the playback opens on its first
+        // frames. `TimelapseFlowTest` walks the refusals and the races; this walks the edge.
+        val station = FlowModel(PanelState(screen = ScreenId.TermLive, houseAttached = true))
+        station.houseSaid(RoundMessage.PlanIssued(HomePlanView(listOf(StoreyView("GROUND", 1, 1, listOf(0))), listOf(RoomView("HALL", RoomKind.Room)))))
+        station.occupancySaid(openedReading(0, listOf(1 to 0)))
+        station.playTimelapse()
+        station.occupancySaid(OccupancyBeat.lapse(0, 1, 0, listOf(listOf(1)), listOf(false)))
+        assertEquals(Flow.viaActions.getValue(ScreenId.TermLive), setOf(station.state.screen))
+
         assertEquals(
             setOf(
                 // The join screen's network row, which is refusable twice over and therefore the
@@ -853,6 +867,8 @@ class FlowTest {
                 ScreenId.Editor, ScreenId.RoomEdit, ScreenId.StairsWarn,
                 ScreenId.SaveName, ScreenId.Delete, ScreenId.HomeDetail, ScreenId.ScanMarker,
                 ScreenId.Secret, ScreenId.Lobby, ScreenId.ScanCaught, ScreenId.Disconnect,
+                // TIMELAPSE, answered by the house's frames (D-319).
+                ScreenId.TermLive,
                 // A hosting phone's CONTINUE back to the lobby it was shown PERMISSIONS from (D-311).
                 ScreenId.Perms,
                 ScreenId.WinInsiders, ScreenId.WinResidents,

@@ -289,6 +289,8 @@ object RecordingText {
                 Event.SubroutineReturned(at, seat("actor"), marker("marker"), ints("entered"))
             "PerformanceEnded" -> Event.PerformanceEnded(at, seat("actor"))
             "TerminalLeft" -> Event.TerminalLeft(at, seat("actor"))
+            "TimelapsePlayed" -> Event.TimelapsePlayed(at, seat("actor"))
+            "TimelapseStopped" -> Event.TimelapseStopped(at, seat("actor"))
             "RevokeArmed" -> Event.RevokeArmed(at, seat("actor"))
             // Both targets are required, like every other field here. A missing one cannot be
             // defaulted: `Seat(0)` is a real seat and a blank card id is a real card id, so a
@@ -344,6 +346,8 @@ object RecordingText {
         "SubroutineReturned" -> setOf("at", "actor", "marker", "entered")
         "PerformanceEnded" -> setOf("at", "actor")
         "TerminalLeft" -> setOf("at", "actor")
+        "TimelapsePlayed" -> setOf("at", "actor")
+        "TimelapseStopped" -> setOf("at", "actor")
         "RevokeArmed" -> setOf("at", "actor")
         "ContactMade" -> setOf("at", "actor", "target")
         // ⚠️ **These three were missing and the two Tier-2 rows above them were unreadable.** T1

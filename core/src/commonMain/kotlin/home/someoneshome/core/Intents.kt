@@ -66,6 +66,9 @@ fun factOf(intent: Intent, at: Tick): Event = when (intent) {
     is Intent.StopSubroutine -> Event.PerformanceEnded(at, intent.actor)
     // The live view closed. The actor alone, for STOP NOW's reason (D-203).
     is Intent.LeaveTerminal -> Event.TerminalLeft(at, intent.actor)
+    // The timelapse, asked for and stopped (D-319). The actor alone, for STOP NOW's reason.
+    is Intent.PlayTimelapse -> Event.TimelapsePlayed(at, intent.actor)
+    is Intent.StopTimelapse -> Event.TimelapseStopped(at, intent.actor)
     is Intent.ReturnSyncPulse -> Event.SyncPulseReturned(at, intent.actor, intent.taps)
 
     is Intent.CheckIn -> Event.MeetingCheckedIn(at, intent.actor)

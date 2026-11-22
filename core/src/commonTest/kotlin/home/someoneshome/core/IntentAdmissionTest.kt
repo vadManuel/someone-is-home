@@ -55,6 +55,8 @@ class IntentAdmissionTest {
         Intent.FireStatic(Seat(1)),
         Intent.StopSubroutine(Seat(2)),
         Intent.LeaveTerminal(Seat(2)),
+        Intent.PlayTimelapse(Seat(2)),
+        Intent.StopTimelapse(Seat(2)),
         Intent.ReturnSyncPulse(Seat(2), listOf(1L, 2L)),
         Intent.CheckIn(Seat(4)),
         Intent.DeclareReadyToVote(Seat(4)),
@@ -241,6 +243,8 @@ class IntentAdmissionTest {
         // actor and nothing else. The host also composes it for a dropped connection, and that is
         // the same request made on the phone's behalf -- not a fact the phone could not have stated.
         is Event.TerminalLeft -> Origin.Requestable
+        // The timelapse's two presses (D-319), for the same reason: the actor and nothing else.
+        is Event.TimelapsePlayed, is Event.TimelapseStopped -> Origin.Requestable
 
         is Event.RoundArmed, is Event.DiscussionClosed, is Event.VoteWindowClosed,
         is Event.TallyHalfwayReached, is Event.MeetingClosed, is Event.EgressExpired,
@@ -256,6 +260,8 @@ class IntentAdmissionTest {
         Event.SubroutineReturned(at, Seat(2), marker, listOf(1)),
         Event.PerformanceEnded(at, Seat(2)),
         Event.TerminalLeft(at, Seat(2)),
+        Event.TimelapsePlayed(at, Seat(2)),
+        Event.TimelapseStopped(at, Seat(2)),
         Event.RevokeArmed(at, Seat(1)),
         // ⚠️ **The three Tier-2 fires were missing from this list**, which is why the assertion
         // below could classify them as requestable while no request produced them and nothing
@@ -350,6 +356,8 @@ class IntentAdmissionTest {
         is Intent.FireStatic -> intent.copy(actor = actor)
         is Intent.StopSubroutine -> intent.copy(actor = actor)
         is Intent.LeaveTerminal -> intent.copy(actor = actor)
+        is Intent.PlayTimelapse -> intent.copy(actor = actor)
+        is Intent.StopTimelapse -> intent.copy(actor = actor)
         is Intent.ReturnSyncPulse -> intent.copy(actor = actor)
         is Intent.CheckIn -> intent.copy(actor = actor)
         is Intent.DeclareReadyToVote -> intent.copy(actor = actor)

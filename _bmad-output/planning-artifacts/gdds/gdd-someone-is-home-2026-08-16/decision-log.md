@@ -13222,6 +13222,244 @@ held (`build/screens/notamarker-in-round-*.png`).
 with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
 the app's XML copied out after each, every result XML counted with a python glob): model 358 (JVM) + 342 (iOS Simulator); core 419 + 417; platform 211; ui 773 (desktop) + 380; harness 132; cards 17; app 280 (the default variant), 170 (Release), 280 (Playtest). 3,779 in all. 0 errors, 0 skipped, and one failure, `OutboundQueueTest.aSeatThatStopsDrainingDelaysNobodyAndIsDroppedWhenItsQueueIsFull`, a known load flake: rerun alone it passes (1 test, 0 failures). The vocabulary lints, `redactionLint` and the cordons ran and passed. `CardReadTest`, `NotAMarkerRender` and the new `ScanRoutingTest`, `EmitSchemaTest` and `IntentWireTest` cases are in the XML.
 
+### D-319 · **The Terminal and the couch show every storey by the strip; the timelapse is built, its cooldown the station's, its frames bare counts every 2 s sent to the reader alone; Static says MONITORING JAMMED on every living phone — built (recording 49)**
+
+**The rulings** (owner, 2026-11-21), on D-316's two stops and D-186's announcement:
+
+1. **Floors.** *"There's only one terminal in the entire home, so you must be able to see all floors
+   by tapping the strip to switch."* The GROUND/UPPER strip becomes a control on the Terminal and on
+   the couch; it opens on the storey the reader or the couch phone is on. No new words, light or
+   colour: the selected storey sits on the room fill, as it does today.
+2. **The timelapse**, D-316's five unruled points, on top of the GDD's table (2:00, 6×, once, the
+   cooldown from playback end, the linear early-cancel cut, oldest to newest, the floor, `cooldown ==
+   history duration`):
+   - *The cooldown belongs to the station. The next reader inherits it.*
+   - *Frames are bare counts (no staleness shading), snapshotted every 2 s of real time*: sixty
+     frames for a full 2:00, each shown for a third of a second at 6×.
+   - *While it can't be played (cooling down, or no history), the button is dimmed (existing dim
+     ink) and reads `TIMELAPSE . READY IN m:ss`.* Otherwise today's `TIMELAPSE . 2:00 AT 6X`, with
+     the history length if that is how it is built.
+   - *A meeting clears it*: it ends playback, and after the meeting the cooldown equals the new, tiny
+     history, per the standing rule. It is not an early cancel.
+   - *F-008's count-up against rule 5: frames switch instantly, with no tweening.*
+   - *Static (D-186) crossing the history renders those seconds as noise*, about 1.7 s at 6×.
+   - *Watching blinds you to the present (GDD).* While playback runs, the live view isn't shown.
+   - *Only the reader receives the frames, as D-316 does for live counts, inside the same fixed-width
+     sealed field or an equally fixed-width approach. Every phone's frames must stay one size whatever
+     happens (D-217).*
+3. **Static's announcement** (owner-approved): *when Static fires, every living phone gets a quiet
+   banner reading `MONITORING JAMMED`, using the house's existing quiet notification: no dim, no buzz
+   (D-118 family). Out seats are exempt (D-186: ghosts are exempt). The Static jam itself is
+   unchanged.*
+
+#### 1 · Every storey, by the strip
+
+`FloorStrip` takes an `onPick`; each storey's cell is a tap, and its look is unchanged (the storey
+drawn on `Ramp.Fill`, its name in ink, the rest in dim). The tap is **input echo**: every storey's
+counts are already in the field (D-316), so `FlowModel.showStorey` writes `PanelState.storeyShown`
+and nothing goes up. `LiveMap.of` takes the storey to draw, or null for the one the screen opens on:
+**the station's storey on the Terminal, the first on the couch** (no ruling decides the couch's
+otherwise). The choice is kept between the live view and its playback and dropped by any other move,
+so each visit opens on its own storey. **Only a home the house sent with more than one storey is a
+control** (`LiveMap.switchable`): the fixture's bungalow draws one storey under GROUND and UPPER, so
+its strip stays the reading it was (not compared pixel for pixel against the tree before; the
+fixture's drawing path did not change).
+
+#### 2 · The timelapse
+
+**The station, in the rules** (`model` `Timelapse`, `core` `Timelapse.kt`). `GameState.timelapse`
+holds the shift's history, the playback running and **the station's cooldown, one tick with no seat
+on it**: the next reader inherits it because there is nothing else it could belong to.
+
+- **A frame every 2 s of the shift** (marks at the shift's start plus 2 s, 4 s, …), the last sixty
+  kept. Each holds **the bare counts the reader would have been shown at that mark**: per room in plan
+  order, the room's latest capture this shift through `Observation.toView` (the house's error, rolled
+  once and stored, D-272), 0 for stairs and for a room nobody sensed. **No band.** The rules read no
+  clock, so `sampled` takes each mark at the first event past it, from the state no later event has
+  touched: the same frames from the same events in every replay.
+- **A frame taken while the house was jammed holds the jam and nothing else** (counts 0): ten
+  seconds of Static is five frames, 5 × ⅓ s ≈ **1.67 s of noise** in a playback. *A player who
+  watches it back learns the window and nothing inside it* (D-186).
+- **TIMELAPSE** (`Event.TimelapsePlayed`) begins a playback when the actor holds the station, nothing
+  is playing, the station's cooldown has run and there is history; the playback plays the history as
+  it stood, oldest to newest, at 6× (a frame every 40/6 ticks), and the cooldown is written then as
+  **playback end + the history's length** (`cooldown == history duration`).
+- **STOP** (`Event.TimelapseStopped`) is the early cancel: the cooldown becomes the history's length
+  times the fraction watched, from now (*reduced linearly by the fraction unwatched*).
+- **`settled`, after every handler**, ends a playback the other ways: played out (the cooldown it
+  wrote stands); **a meeting called (ended, not an early cancel, the cooldown left as it was)**; or
+  the reader no longer holding the station (left, out, or the connection dropped; D-203), which is an
+  early cancel at that event. **A new shift** (a meeting's end) wipes the history, moves the floor to
+  the meeting's end and **clears the cooldown to the new, empty history**. Written once, after every
+  handler, for `GameState.reader`'s reason: a rule in each way out is a rule the next way out lacks.
+- **Rule 1: neither request emits anything, whatever it decides.** Started, refused, stopped or
+  ignored, the reduction's effects are empty; what the reader learns is the beat.
+
+**What the reader is sent: the same field, one width for everyone** (`OccupancyWire`). While the
+reader's playback runs, `occupancyBeat` sends **its frames and never the live view** (*watching
+blinds you to the present*): a new kind, `Lapse`, carrying the frame showing now and the next two
+(**three a beat**, a beat being a second, so 6 s of history at 6×), which frames are jammed, where they
+sit in the playback, and the outline. Otherwise the reader's reading carries two bytes more: **READY
+IN** (whole seconds until the station may play: its cooldown, or the wait for the history's first
+frame) and **the history's length in frames**. **The field is now as wide as a full beat of a playback
+on every phone, every beat, whatever it holds**: header 8 bytes plus 3 × 128 room bytes, sealed, 544
+characters where it was 196. The reader's frames, the reader's live counts, the couch's and nothing are
+still the same uniform bytes off the Wi-Fi (D-217, D-306). **The schema is the gate**: a third beat
+kind, `TIMELAPSE_PLAYBACK`, both living classes (`TERMINAL_READING`'s reason; never one role), asked
+before a playback fills the field; with no row a playing reader is sent nothing, the fail-closed
+direction.
+
+**What the phone draws. No new copy, light, colour or type beyond the two approved strings.**
+
+- **TIMELAPSE**: ready, `TIMELAPSE . m:ss AT 6X` with **the history it will play** (2:00 once the
+  shift is two minutes old: the existing label read as the history length); not ready, **dimmed in
+  the palette's dim ink, inert, `TIMELAPSE . READY IN m:ss`**; before the house has said either, dimmed
+  with the dash. A press asks the house (`IntentMessage.PlayTimelapse`, in the request slot), and the
+  playback **opens on the house's first frames**, not on the press, so a beat answered before the
+  request arrived cannot walk the phone in and out again.
+- **The playback** (the existing `TimelapseScreen`): the frame's counts in one ink, the fixture's
+  playback ink (`Ramp.Dim`), the outline, the header `TERMINAL . -m:ss` (how far behind the playback's
+  start the frame is) and the bar the share played, both of which were fixtures. `FlowHost` shows the
+  beat's next frame every third of a second; **the frames switch, nothing tweens** (rule 5; F-008's
+  count-up superseded). A jammed frame is **Static's own noise over the plan, one field a frame and no
+  counts under it**. A jam landing *now* veils the playback as it veils the live view.
+- **STOP THE PLAYBACK**, BACK, or any way off the playback while the house still plays it sends
+  `StopTimelapse` once; the house's own end (a reading arrives on the playback) returns to the live
+  view and sends nothing. A beat still carrying a stopped playback opens nothing.
+
+#### 3 · MONITORING JAMMED
+
+**No new effect and no wire change.** `StaticOpened` already reaches the two living classes and no out
+one (D-186), so the phone raises the banner on it: **the house's quiet text** (`NotificationKind.Text`,
+the kind every later house text is): no dim, no buzz, kept in the house thread and on the lock screen
+until swiped (D-105, D-119), the same on an Insider's phone and a Resident's. **It stands over the
+screen it lands on** (`PanelState.quietUp`) rather than walking the phone to page 1 as a later text
+does: the Terminal's reader stays at the station under the jam the banner names (walked off, the
+phone would have freed the station, D-203), and work stays where it was. On the lock screen it lands
+under the clock; on a screen the house is driving it waits in the list, as every quiet notification
+does. An out phone handed one anyway raises nothing. The jam itself is unchanged.
+
+#### The recording: 48 → 49, and why it had to move
+
+The owner asked for a phone's playback to be a pure function of recorded state. It is: the frames are
+taken by the rules from the recorded states at each mark, and the playback and the cooldown are
+reduced from two recorded events, so `occupancyBeat` of a recorded state at a tick says what the
+reader was shown, as D-316's beats do; no beat is recorded. That needs **two events a 48 build cannot
+construct** (`TimelapsePlayed`, `TimelapseStopped`, `actor=`) and **a state-row field**, `timelapse=`
+(the next mark, the cooldown, the playback, every frame), so a 48 recording is refused. Built alone,
+this is 49; D-320 or D-322 landing beside it would make the integration's number theirs to set.
+
+#### Judgement calls, all provisional, owner to confirm
+
+- **Leaving the station mid-playback, being put out, or dropping the connection is an early cancel**
+  (the cooldown cut by the share unwatched). Only the meeting was ruled not to be; the table's *early
+  cancel* is read as every other way the playback ends before its end.
+- **The ready label shows the history length** (`TIMELAPSE . 0:34 AT 6X` for 34 s of history), which is
+  2:00 once the shift is that old.
+- **READY IN with no history counts to the first frame**, two seconds after a meeting's end.
+- **The playback's counts are in the fixture's playback ink**, `Ramp.Dim`, one ink for every frame.
+- **The banner stands over the screen** rather than walking the phone to page 1, and it is kept in
+  the house thread like every later text.
+- **A beat carries three frames** and the phone spaces them; a late or early beat shows its first frame
+  on arrival, so a frame can run a little long or short. The house's position is never out by more
+  than a beat.
+- The field grows to 544 characters for everyone (rule 7, below).
+
+#### Allocation (rule 7)
+
+Writing an upload's answer measured **5 552 B** (`WireDecodeAllocationTest`, under its 6 KB ceiling,
+unchanged). The house seals 348 more characters per answer per seat: at 18 seats about 18 × 0.7 KB ≈
+13 KB/s, under 3 % of 0.5 MB/s, by counting. The rules take one frame every two seconds (a list of at
+most sixty and one count per room) and nothing on events between marks; a playing reader's beat is
+three short lists. The phone opens the same field in place and writes its panel when the beat changes.
+
+#### Guards, each proven by breaking it
+
+- `TimelapseTest` (core, the real pipeline, nine): a frame every two seconds of the shift, oldest
+  first, sixty at most, each the capture's reported count; the playback plays them oldest to newest,
+  three a beat, and the live view is not sent; the cooldown is the station's, from playback end, equal
+  to the history, inherited by the next reader, and a press while it cools starts nothing; STOP cuts it
+  linearly (a quarter watched, a quarter of 48 s; leaving at half, half), and somebody else's STOP is
+  nothing; a meeting ends the playback without cutting the cooldown, and after it the history, the
+  floor and the cooldown start from the meeting's end, the station waiting two seconds for its first
+  frame; Static's ten seconds are five jammed frames, counts 0, 1.67 s at 6×; **only the reader is sent
+  frames**; an Insider reader and a Resident reader get the same timelapse, beats and sealed bytes;
+  TIMELAPSE and STOP emit nothing whatever they decide.
+  **Injected: frames sent to every living seat** (`playingAt(at)` without the reader check):
+  *seat 0, not the reader, was sent Lapse(here=0, frames=24, first=0, counts=[[0, 0, 0, 0, 0, 0, 0],
+  [0, 0, 0, 0, 0, 0, 0], [0, 2, 0, 0, 0, 0, 0]], jammed=[false, false, false]) at 1000
+  expected:<Nothing> but was:<Lapse(…)>*. **Injected: the `TIMELAPSE_PLAYBACK` row deleted**: four of
+  the nine fail, the first *the reader was sent no frames at 1000. Expected value to be of type
+  <…OccupancyBeat$Lapse>, actual <…OccupancyBeat$Nothing>*. Restored, all green.
+- `OccupancyWireTest` (model): a reading's READY IN and history and a playback's three frames, jams
+  and place round-trip, every kind one width, the widest (three frames of 128 rooms) included; a jammed
+  frame with a count, frames past the playback, none, four, a jam bit for a frame not carried, a READY
+  IN on a playback, a band on a playback count and a byte past the frames all read as nothing.
+- `EmitSchemaTest`: `TIMELAPSE_PLAYBACK` is both living classes and a beat kind.
+- `TimelapseRecordingTest` (harness): the fixture round with a TIMELAPSE at every station claim and a
+  STOP after it records both events and `timelapse=` on every state row, a playback begins and frames
+  are taken, the text form round-trips and the round replays identically; a role exchange under it
+  leaves nothing unexplained and the effect rows are the round's without it.
+- `TimelapseFlowTest` (ui): the strip switches the Terminal's storey and the couch's, each opening on
+  its own, nothing sent, kept into the playback and dropped off the station; TIMELAPSE sends one
+  request and the playback opens on the house's frames only, frames step and a stale step moves
+  nothing; the house's end returns with no STOP, STOP sends one, a stale playback beat opens nothing;
+  the READY IN labels (1:14, 0:02, a dash) and the history label (0:34); a jammed frame is the frame's
+  own noise with no counts; MONITORING JAMMED on Home, the Terminal and page 2 for both roles, quiet,
+  stored, the screen kept, swiped away in place, the reader not freed; never on an out phone (the
+  schema's rows, and the phone's own guard); every value the same for an Insider and a Resident.
+- `FlowTest` walks the new action edge (TIMELAPSE → the playback, by the house's frames);
+  `ScreenGraphTest` holds that the live view's button publishes no walk.
+- `TimelapseRenderTest` (ui, rendered): the strip tapped for real on both screens; the playback; the
+  dimmed button inert to a tap; the banner; and **a Resident's and an Insider's pixels identical** for
+  the dimmed button, the banner over page 1 and a playback frame.
+- **Rewritten**: `HousedMapRenderTest`'s plain bytes moved to `HEADER_BYTES`; the five recording tests
+  pinned to `recording/49`; `IntentWireTest` and `IntentAdmissionTest` name the two requests
+  (requestable, the actor and nothing else).
+
+**Rendered and looked at** (`ui/build/screens/d319-*.png`, 600 by 1300, MUM & DAD'S: KITCHEN, LIVING,
+HALL, UTILITY, GARAGE on GROUND with the station in UTILITY; BED 1, BED 2, BATH 1, LANDING upstairs).
+**The Terminal on GROUND** (`d319-terminal-ground`): GROUND on the room fill, UPPER dim beside it;
+KITCH…, LIVING, HALL, UTILI… outlined on the fill, GARAGE; 2, 0, 0, 1, 0, fresh in ink and cold dim;
+`TIMELAPSE . 2:00 AT 6X` in ink. **On UPPER after a tap** (`d319-terminal-upper`): UPPER on the fill,
+BED 1 1, BED 2 0, BATH 1 3 (stale ink), LANDI… 0, no outline, the button unchanged. **The couch on
+GROUND and on UPPER** (`d319-couch-ground`, `-upper`): the two meters, the strip with the tapped storey
+on the fill, every count in full ink, no outline. **A timelapse frame** (`d319-timelapse-frame`):
+`TERMINAL . -1:06`, GROUND, the frame's counts (0, 0, 0, 1, 0) all in the one dim ink, UTILITY
+outlined, the bar a little under half, MOTION BUDGET, STOP THE PLAYBACK. **A jammed frame**
+(`d319-timelapse-jammed`): `TERMINAL . -1:00`, the plan under Static's noise with fragments of the
+labels and no counts, the strip, the bar and the foot clean. **The dimmed button**
+(`d319-ready-in`): the live view as on GROUND, the button's outline unchanged and its words
+`TIMELAPSE . READY IN 1:14` in the dim ink. **MONITORING JAMMED over page 1**
+(`d319-monitoring-jammed`): the dark quiet banner at the top, HOUSE and the time's dash on its first
+line and MONITORING JAMMED under it, page 1 untouched and undimmed beneath (NEXT SUBROUTINE, COMPLETED,
+the four tiles, the dock).
+
+| site | what it said | what it says now |
+|---|---|---|
+| `model` `Timelapse`, `TimelapseFrame`, `Playback`; `GameState.timelapse` | (none) | the station's history, playback and cooldown |
+| `model` `Event`, `Intent`, `IntentMessage` | `TerminalLeft` | and `TimelapsePlayed`, `TimelapseStopped`; `PlayTimelapse`, `StopTimelapse` |
+| `model` `OccupancyWire`, `OccupancyBeat` | 3-byte header, 128 room bytes, 196 characters | 8-byte header, `Lapse`, READY IN and history on a reading, 3 × 128 room bytes, 544 characters |
+| `model` `EmitSchema` | two beat kinds | and `TIMELAPSE_PLAYBACK`, both living |
+| `core` `Rules.reduce`; `Timelapse.kt`; `Occupancy.kt`; `Intents.kt`; `Admission.kt` | (none) | sampled before, settled after; the two requests; the playback's beat; readiness |
+| `harness` `Transcript`, `RecordingText`, `Recording.HEADER` | `recording/48` | the two events; `timelapse=` on the state row; `recording/49` |
+| `ui` `FloorStrip`, `LiveMap.of` | a reading; the station's storey or the first | a control on a home of two storeys or more; the storey tapped |
+| `ui` `TermLiveScreen`, `TimelapseScreen`, `KitSecondary` | `TIMELAPSE . 2:00 AT 6X`, a walk; a fixture playback | the house's readiness, dimmed READY IN, a request; the house's frames, jammed frames as noise; an `ink` |
+| `ui` `Flow` (`occupancySaid`, `playTimelapse`, `showStorey`, `lapseStepped`, `monitoringJammed`), `FlowHost`, `PanelState`, `PanelVals`, `Notifications.MONITORING_JAMMED` | (none) | as above |
+| `gdd.md` M11, M12, the timelapse table, Static, F-008 | the couch's one-storey limit; F-008's count-up | every storey by the strip; five new rows; built notes; F-008 superseded |
+| `phone-session-2026-11-19.md` | *the timelapse is still the empty frame*; *Static is told to nobody* | the strip, the timelapse and MONITORING JAMMED to check |
+
+**Checked** (on the final tree, `*/build/test-results` cleared first: `./gradlew check --continue`
+with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
+the app's XML copied out after each, every result XML counted with a python glob): model 364 (JVM) +
+348 (iOS Simulator); core 442 + 440; platform 211; harness 138; ui 796 (desktop) + 394 (iOS
+Simulator); cards 17; app 284 (the default variant), 173 (Release), 284 (Playtest). 3,434 in the
+default check, 0 errors, 0 skipped, and one failure, `OutboundQueueTest.aSeatThatStopsDrainingDelaysNobodyAndIsDroppedWhenItsQueueIsFull`,
+the known load flake: rerun alone it passes (1 test, 0 failures). The vocabulary lints and
+`redactionLint` ran clean. `TimelapseTest` (JVM and iOS, 9 each), `TimelapseFlowTest` (8 each),
+`TimelapseRenderTest` (5) and `TimelapseRecordingTest` (2) are in the XML. **Nothing here has run on
+a phone**: the phone session's new lines carry the strip, the timelapse and the banner.
+
 ### D-320 · **The verdict buzzes, the EGRESS line follows the Insider count, the lobby's three timed rows get the owner's ranges and every guest draws the host's numbers, and the game makes no sound — built (recording 49); the EGRESS line is STOPPED for one case: INSIDERS left UNKNOWN at seven to eleven seats, where no phone holds the count**
 
 **The rulings** (owner, 2026-11-21, *Owner's review, 2026-11-21 morning* in

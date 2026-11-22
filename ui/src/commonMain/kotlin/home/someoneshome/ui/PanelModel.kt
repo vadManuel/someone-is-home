@@ -312,6 +312,15 @@ data class PanelState(
      */
     val egressAlertUp: Boolean = false,
     /**
+     * **MONITORING JAMMED, standing over whatever screen it landed on** (D-319, the owner's ruling:
+     * *when Static fires, every living phone gets a quiet banner reading MONITORING JAMMED, using the
+     * house's existing quiet notification: no dim, no buzz*). The house's quiet text, kept in the
+     * house thread and on the lock screen as every later text is (D-119); drawn over the screen
+     * rather than walking the phone to page 1, so the Terminal's reader stays at the station under
+     * the jam the banner names (D-186). Cleared by the swipe and by any arrival ([arrivingAt]).
+     */
+    val quietUp: HouseText? = null,
+    /**
      * **The page the report screen took over: [ScreenId.Home] or [ScreenId.Page2]** (D-307), or null
      * on every other screen. Set on the arrival at [ScreenId.Report] and cleared by every arrival
      * ([arrivingAt]); a cancelled report goes back to it. A banner over page 1 is page 1.
@@ -702,6 +711,25 @@ data class PanelState(
     val terminalBeat: OccupancyBeat.Terminal? = null,
     /** **True occupancy, as the house last said it to this phone on the couch** (D-316, M12). */
     val outsideBeat: OccupancyBeat.Outside? = null,
+    /**
+     * **The timelapse playing, as the house last said it to this phone, its reader** (D-319): up to
+     * three frames a beat, oldest to newest. While it is set the live view is not: the house sends
+     * one or the other (*watching the past blinds you to the present*).
+     */
+    val lapseBeat: OccupancyBeat.Lapse? = null,
+    /**
+     * **Which of [lapseBeat]'s frames is showing**: the first as the beat lands, then the next every
+     * third of a second (`FlowHost`), 2 s of history at 6×. The frames switch, nothing tweens
+     * (rule 5, the owner's ruling against F-008's count-up).
+     */
+    val lapseShown: Int = 0,
+    /**
+     * **The storey the reader or the couch tapped on the floor strip**, or null for the one the
+     * screen opens on: the station's storey on the Terminal, the first on the couch (D-319, the
+     * owner's ruling: *you must be able to see all floors by tapping the strip to switch*). Input echo,
+     * so it never goes up; dropped when the phone leaves the screen.
+     */
+    val storeyShown: Int? = null,
     /**
      * **Page 2's three clocks, as every phone was told they restarted** (D-239). See
      * [PublicCooldown]. Null means no house has armed a round on this phone, and the port's drawn
@@ -1485,7 +1513,7 @@ class PanelVals(
     val terminalMap: LiveMap? = housed(
         state.plan?.let { plan ->
             state.terminalBeat?.let { beat ->
-                LiveMap.of(plan, beat.here) { i ->
+                LiveMap.of(plan, beat.here, state.storeyShown) { i ->
                     val count = beat.counts.getOrElse(i) { 0 }
                     count to when (beat.bands.getOrElse(i) { OccupancyWire.COLD }) {
                         OccupancyWire.FRESH -> Ramp.Ink
@@ -1500,11 +1528,41 @@ class PanelVals(
     )
 
     /**
-     * **The playback's plan as drawn**: the bungalow in the harness, and nothing on a housed phone,
-     * because the timelapse is not built (D-316 stops on it: its history, its cooldown's holder and
-     * its screen states are unruled).
+     * **The frame of the playback showing now** (D-319), or null: one of [PanelState.lapseBeat]'s,
+     * picked by [PanelState.lapseShown].
      */
-    val timelapseMap: LiveMap? = timelapseCounts?.let(LiveMap::ofFixture)
+    private val lapseFrame: Int? = state.lapseBeat?.let { beat -> state.lapseShown.coerceIn(0, beat.counts.size - 1) }
+
+    /**
+     * **Whether the frame showing was taken while the house was jammed** (D-186, D-319): those
+     * seconds play back as noise, about 1.7 s of a 20 s playback, and nothing inside them.
+     */
+    val lapseJammed: Boolean = lapseFrame?.let { state.lapseBeat?.jammed?.getOrNull(it) } == true
+
+    /**
+     * **The noise a jammed frame plays as** (D-319): Static's own field (D-186), one picture a frame,
+     * drawn from the frame's place in the playback so the same frame is the same noise and the next
+     * is not. The frames switch it; nothing on this phone animates it.
+     */
+    val lapseNoise: Pair<StaticJam, Int>? =
+        if (!lapseJammed) null else StaticJam(1, LAPSE_NOISE_SEED) to ((state.lapseBeat?.first ?: 0) + (lapseFrame ?: 0))
+
+    /**
+     * **The playback's plan as drawn** (D-319): the home with the frame's bare counts, one ink and
+     * no band (the owner's ruling: *frames are bare counts*), the fixture's playback ink; no counts
+     * at all on a jammed frame; the bungalow in the harness; the empty frame on a housed phone not
+     * playing.
+     */
+    val timelapseMap: LiveMap? = housed(
+        state.plan?.let { plan ->
+            state.lapseBeat?.let { beat ->
+                val frame = beat.counts[lapseFrame ?: 0]
+                LiveMap.of(plan, beat.here, state.storeyShown) { i -> if (lapseJammed) null else frame.getOrElse(i) { 0 } to Ramp.Dim }
+            }
+        },
+        timelapseCounts?.let(LiveMap::ofFixture),
+        nothing = null,
+    )
 
     /**
      * **The couch's plan as drawn** (D-316, M12): the home with true occupancy in full ink, no band
@@ -1513,21 +1571,47 @@ class PanelVals(
      */
     val trueMap: LiveMap? = housed(
         state.plan?.let { plan ->
-            state.outsideBeat?.let { beat -> LiveMap.of(plan, -1) { i -> beat.counts.getOrElse(i) { 0 } to Amber.Bright } }
+            state.outsideBeat?.let { beat -> LiveMap.of(plan, -1, state.storeyShown) { i -> beat.counts.getOrElse(i) { 0 } to Amber.Bright } }
         },
         trueCounts?.let(LiveMap::ofFixture),
         nothing = null,
     )
 
     /**
-     * **How far back the playback is, and how much of it has played** — the port's `-1:12` and
-     * 44%, or a dash and an empty bar (D-257). Nothing on any phone knows which second of a playback
-     * it shows, because no playback history exists (E8, `TimelapseScreen`).
+     * **How far back the frame showing is, and how much of the playback has played** (D-319) — the
+     * frame's distance behind the playback's start, two seconds a frame, as `-m:ss`, and the share
+     * played; the port's `-1:12` and 44% in the harness; a dash and an empty bar on a housed phone
+     * not playing (D-257).
      */
-    val timelapseAt: String = housed(null, "-1:12", nothing = NO_READING)
+    val timelapseAt: String = housed(
+        state.lapseBeat?.let { beat -> "-" + clock((beat.frames - (beat.first + (lapseFrame ?: 0))) * 2) },
+        "-1:12", nothing = NO_READING,
+    )
 
     /** See [timelapseAt]. */
-    val timelapsePlayed: Float = housed(null, 0.44f, nothing = 0f)
+    val timelapsePlayed: Float = housed(
+        state.lapseBeat?.let { beat -> (beat.first + (lapseFrame ?: 0) + 1).toFloat() / beat.frames },
+        0.44f, nothing = 0f,
+    )
+
+    /**
+     * **Whether the TIMELAPSE button may be pressed** (D-319): the house said the station is ready,
+     * which means its cooldown has run and it holds history. Always in the harness, which has no
+     * house; never on a housed phone the house has said nothing to yet.
+     */
+    val timelapseReady: Boolean = housed(state.terminalBeat?.let { it.readyIn == 0 && it.history > 0 }, true, nothing = false)
+
+    /**
+     * **The TIMELAPSE button's words** (D-319). Ready: today's `TIMELAPSE . 2:00 AT 6X`, the 2:00 being
+     * the history it will play, which is two minutes once a shift is that old. Not ready, dimmed:
+     * `TIMELAPSE . READY IN m:ss` (the owner's words), the station's cooldown or the wait for the
+     * history's first frame, as the house said it; a dash before the house has said either.
+     */
+    val timelapseLabel: String = when {
+        !state.houseAttached -> "TIMELAPSE . 2:00 AT 6X"
+        timelapseReady -> "TIMELAPSE . ${clock((state.terminalBeat?.history ?: 0) * 2)} AT 6X"
+        else -> "TIMELAPSE . READY IN ${state.terminalBeat?.let { clock(it.readyIn) } ?: NO_READING}"
+    }
 
     // ---- Host setup -------------------------------------------------------------------------
 
@@ -1978,6 +2062,7 @@ class PanelVals(
     // (E1, D-297): `under` is the Subroutine itself, so a swipe leaves the person where they were.
     val arrival: Arrival? = when {
         state.egressAlertUp -> Arrival(Notifications.egressFor(egressType, egressNodes), under = state.screen)
+        state.quietUp != null -> Arrival(Notifications.houseText(state.quietUp), under = state.screen)
         state.houseAttached && state.screen == ScreenId.Quiet -> state.houseTexts.lastOrNull()
             ?.let { Arrival(Notifications.houseText(it), under = ScreenId.Home) }
         else -> Notifications.arrivalOn(state.screen, egressType, egressNodes)
@@ -2429,6 +2514,15 @@ class PanelVals(
          * screenshots; see [PanelVals.housed].
          */
         const val NO_READING = "-"
+
+        /** The seed a jammed playback frame's noise is drawn from (D-319): one field for every phone. */
+        const val LAPSE_NOISE_SEED: Long = 20261121L
+
+        /** **`m:ss`**, for the timelapse's history, its frames' distance back and its READY IN (D-319). */
+        fun clock(seconds: Int): String {
+            val s = seconds.coerceAtLeast(0)
+            return "${s / 60}:${(s % 60).toString().padStart(2, '0')}"
+        }
 
         /** What the house tells every Insider to do, after the quote (D-101, D-247). */
         const val HOUSE_INSTRUCTION = "Follow my instructions tonight and nobody else needs to hear about it."

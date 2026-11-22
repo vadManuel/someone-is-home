@@ -393,6 +393,13 @@ class GameState private constructor(
      * only if it is this one (D-283). Never reaches a client: no effect carries it.
      */
     val host: Seat?,
+    /**
+     * **The Terminal's timelapse: the station's history, the playback running and the station's
+     * cooldown** (D-319). See [Timelapse]. One per round and house-wide, because the owner ruled the
+     * cooldown the station's: *the next reader inherits it*. Reset at every meeting's end, the
+     * history's floor. Reaches no client as itself: the reader is shown its beat, sealed.
+     */
+    val timelapse: Timelapse,
 ) {
     /** **Whether [seat] is the host's** (D-289): the notice's one exception to R7 (D-283). */
     fun isHost(seat: Seat): Boolean = host?.index == seat.index
@@ -819,13 +826,14 @@ class GameState private constructor(
         observations: List<Observation> = this.observations,
         nextObservation: Long = this.nextObservation,
         host: Seat? = this.host,
+        timelapse: Timelapse = this.timelapse,
     ) = GameState(
         armed, outcome, seats, insiderSeats, revoked, newlyRevoked, reported, restrained, revokeArms,
         touches, unreachable, switchedOff, warned, closed, cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
         activeMarkers, destinations, presence, staticUntil, meeting, egress, egressReadyAt, oneLines,
         names, voteWindowSeconds, discussionSeconds, egressTimerSeconds, revokeCooldownSeconds,
         nextEntity, seed, terminal, reader, plan, terminalRoom, shiftStartedAt,
-        sightings, observations, nextObservation, host,
+        sightings, observations, nextObservation, host, timelapse,
     )
 
     companion object {
@@ -973,6 +981,8 @@ class GameState private constructor(
             observations = emptyList(),
             nextObservation = 1L,
             host = host,
+            // No history, no playback, and the station ready: the floor is the round's start (D-319).
+            timelapse = Timelapse.startingAt(shiftStartedAt),
         )
 
         val EMPTY = GameState(
@@ -1020,6 +1030,7 @@ class GameState private constructor(
             observations = emptyList(),
             nextObservation = 1L,
             host = null,
+            timelapse = Timelapse.startingAt(Tick(0)),
         )
     }
 }

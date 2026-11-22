@@ -326,6 +326,13 @@ object Notifications {
         bodySize = 8.5,
     )
 
+    /**
+     * **What the house says when Static fires** (D-319; the owner's words, approved 2026-11-21).
+     * D-186's announcement: *the house shows that it was jammed, and never who*. A quiet house text
+     * on every living phone, built by [houseText] like every other.
+     */
+    const val MONITORING_JAMMED: String = "MONITORING JAMMED"
+
     /** All five, for the tests that check a property of every kind at once. */
     val all: List<Notification> = listOf(opening, egress, text, unblocked, notice)
 

@@ -52,7 +52,7 @@ class HousedMapRenderTest {
         plain[0] = kind.toByte()
         plain[1] = (here + 1).toByte()
         plain[2] = rooms.size.toByte()
-        rooms.forEachIndexed { i, (count, band) -> plain[3 + i] = (count or (band shl 6)).toByte() }
+        rooms.forEachIndexed { i, (count, band) -> plain[OccupancyWire.HEADER_BYTES + i] = (count or (band shl 6)).toByte() }
         return requireNotNull(OccupancyWire.read(plain)) { "the field did not read" }
     }
 

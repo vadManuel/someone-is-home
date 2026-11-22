@@ -477,6 +477,12 @@ class EmitSchemaTest {
             listOf(ClientClass(Role.Resident, RoundState.Out), ClientClass(Role.Insider, RoundState.Out)).sortedBy { it.toString() },
             EmitSchema.classesFor(EmitSchema.TRUE_OCCUPANCY).sortedBy { it.toString() },
         )
+        // D-319: the timelapse's frames are the reading's, both living classes and no out one.
+        assertEquals(
+            listOf(ClientClass(Role.Resident, RoundState.Live), ClientClass(Role.Insider, RoundState.Live)).sortedBy { it.toString() },
+            EmitSchema.classesFor(EmitSchema.TIMELAPSE_PLAYBACK).sortedBy { it.toString() },
+        )
+        assertTrue(EmitSchema.TIMELAPSE_PLAYBACK in EmitSchema.BEAT_KINDS)
     }
 
     /**

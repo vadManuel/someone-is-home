@@ -188,6 +188,21 @@ sealed class IntentMessage {
     data object LeaveTerminal : IntentMessage()
 
     /**
+     * **TIMELAPSE pressed at the station** (D-319, [Intent.PlayTimelapse]). Empty for
+     * [LeaveTerminal]'s reason: the house decides from the station whether a playback begins.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("PlayTimelapse")
+    data object PlayTimelapse : IntentMessage()
+
+    /** **STOP THE PLAYBACK pressed** (D-319, [Intent.StopTimelapse]). Empty for [LeaveTerminal]'s reason. */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("StopTimelapse")
+    data object StopTimelapse : IntentMessage()
+
+    /**
      * **The Sync Pulse, handed over — the containment channel, which was not on the wire at all**
      * (E-P2-5 / E-P3-7, `gdd.md:355`, [Intent.ReturnSyncPulse]).
      *
@@ -290,6 +305,8 @@ sealed class IntentMessage {
         is FireStatic -> Intent.FireStatic(actor)
         is StopSubroutine -> Intent.StopSubroutine(actor)
         is LeaveTerminal -> Intent.LeaveTerminal(actor)
+        is PlayTimelapse -> Intent.PlayTimelapse(actor)
+        is StopTimelapse -> Intent.StopTimelapse(actor)
         is ReturnSyncPulse -> Intent.ReturnSyncPulse(actor, taps)
         is CheckIn -> Intent.CheckIn(actor)
         is DeclareReadyToVote -> Intent.DeclareReadyToVote(actor)

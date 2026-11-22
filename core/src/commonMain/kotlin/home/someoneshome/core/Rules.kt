@@ -40,8 +40,15 @@ import home.someoneshome.model.tallyOf
  * byte-identically from its recording, and lets the rules be exercised headless in milliseconds
  * instead of with eight phones in a dark room once a month.
  */
-fun reduce(state: GameState, event: Event): Reduction<GameState, Effect> =
-    ending(event, dispatch(state, event))
+fun reduce(state: GameState, event: Event): Reduction<GameState, Effect> {
+    // **The station's timelapse on both sides of every handler** (D-319): the history's marks that
+    // have passed are taken first, from the state no later event has touched, and afterwards the
+    // ways a playback ends that are not its reader's STOP are settled once, for every handler, so a
+    // new way to lose the station is not a way a playback outlives it. See `Timelapse.kt`.
+    val before = sampled(state, event.at)
+    val handled = dispatch(before, event)
+    return ending(event, Reduction(settled(before, handled.state, event.at), handled.effects))
+}
 
 private fun dispatch(state: GameState, event: Event): Reduction<GameState, Effect> = when (event) {
 
@@ -64,6 +71,8 @@ private fun dispatch(state: GameState, event: Event): Reduction<GameState, Effec
     is Event.PerformanceEnded -> performanceEnded(state, event)
 
     is Event.TerminalLeft -> terminalLeft(state, event)
+    is Event.TimelapsePlayed -> timelapsePlayed(state, event)
+    is Event.TimelapseStopped -> timelapseStopped(state, event)
 
     is Event.MeetingCalled -> meetingCalled(state, event)
     is Event.MeetingCheckedIn -> checkedIn(state, event)

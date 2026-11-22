@@ -113,6 +113,10 @@ object Transcript {
         // somebody left the station (D-203).
         is Event.TerminalLeft ->
             row("TerminalLeft", event.at, "actor" to num(event.actor.index))
+        is Event.TimelapsePlayed ->
+            row("TimelapsePlayed", event.at, "actor" to num(event.actor.index))
+        is Event.TimelapseStopped ->
+            row("TimelapseStopped", event.at, "actor" to num(event.actor.index))
         is Event.RevokeArmed ->
             row("RevokeArmed", event.at, "actor" to num(event.actor.index))
         // The two Tier-2 fires. Both carry their target, because the target is what was ASKED for
@@ -502,6 +506,23 @@ object Transcript {
     private fun seatOrNone(seat: Seat?): String = seat?.let { num(it.index) } ?: "none"
 
     /**
+     * **The station's timelapse** (D-319): the next mark, the cooldown, the playback (its reader,
+     * start and frame count) and every frame (`mark:counts` dot-joined, `j` for a jammed one).
+     */
+    private fun timelapse(held: home.someoneshome.model.Timelapse): String = buildString {
+        append("next@").append(held.nextFrameAt.step)
+        append(":ready@").append(held.readyAt.step)
+        append(":playback=").append(
+            held.playback?.let { "${num(it.reader.index)}@${it.startedAt.step}#${num(it.frames.size)}" } ?: "none"
+        )
+        append(":frames=").append(
+            held.history.joinToString(";") { f ->
+                "${f.at.step}:" + if (f.jammed) "j" else f.counts.joinToString(".") { num(it) }
+            }
+        )
+    }
+
+    /**
      * Field separators must not survive inside a value, or a body could forge a row.
      *
      * **The comma is in here because lists are comma-joined**, and a marker id is external input
@@ -700,6 +721,12 @@ object Transcript {
             }
         )
         append("|nextObservation=").append(num(state.nextObservation))
+        // **The station's timelapse, history and all** (D-319). It reaches no client as itself --
+        // the reader is shown its beat, sealed -- so a state row is the only artifact that holds it,
+        // and a replay that took a frame at a different mark, or from a different state, or that
+        // started, cut or cleared the station's cooldown differently, stops matching here. Each frame
+        // is its mark, its bare counts and whether the house was jammed.
+        append("|timelapse=").append(timelapse(state.timelapse))
         // **The meeting, ballots and all.** Live selections are the one thing at a meeting that
         // only a player outside the system may read (D-075), which is exactly why they belong in
         // an authority-side state row: a recording that stopped short of them could not tell a

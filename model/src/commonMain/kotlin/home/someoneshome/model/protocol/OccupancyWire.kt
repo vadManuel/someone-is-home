@@ -26,14 +26,26 @@ import home.someoneshome.model.ObservationView
  *
  * ### The layout, before sealing ([PLAIN_BYTES])
  *
- * - byte 0: the kind, [KIND_NOTHING], [KIND_TERMINAL] or [KIND_OUTSIDE];
+ * - byte 0: the kind, [KIND_NOTHING], [KIND_TERMINAL], [KIND_OUTSIDE] or [KIND_LAPSE];
  * - byte 1: the Terminal's own room, the reader's outline, as its index in the plan plus one, or 0;
- * - byte 2: how many rooms follow, at most [MAX_ROOMS];
- * - then one byte per room in plan order: the count in the low six bits, the band (fresh 0, stale
- *   1, cold 2) in the top two. True occupancy has no band.
+ * - byte 2: how many rooms each set of counts holds, at most [MAX_ROOMS];
+ * - bytes 3 to 7 (D-319), the timelapse's: on a reading, byte 3 the seconds until a playback may
+ *   begin and byte 4 the frames the history holds; on a playback, byte 4 the frames it plays, byte 5
+ *   the first frame this beat carries, byte 6 how many it carries (one to [LAPSE_FRAMES]) and byte 7
+ *   which of them were jammed, one bit each; zero everywhere else;
+ * - then, from [HEADER_BYTES], one byte per room in plan order: the count in the low six bits, the
+ *   band (fresh 0, stale 1, cold 2) in the top two. True occupancy and a playback's frames have no
+ *   band, and a playback carries its frames one after another.
  *
  * Every byte past the rooms is zero, and a field that is nothing is all zeros, so a field holding
  * nothing and one holding a reading differ only under the seal.
+ *
+ * ### One width, the playback's (D-319)
+ *
+ * A playback shows a frame every third of a second (2 s at 6×) and the field arrives once a beat, so
+ * a beat carries the next [LAPSE_FRAMES] frames. The field is as wide as that on every phone, every
+ * beat, whatever it holds: [LAPSE_FRAMES] times [MAX_ROOMS] room bytes. *Every phone's frames must
+ * stay one size whatever happens* (the owner's ruling, D-217).
  */
 
 /**
@@ -52,12 +64,45 @@ sealed class OccupancyBeat {
      * house reported (its error rolled once at capture, D-272) and the band it stood in when this
      * beat was built (`Observation.stalenessAt`, its jitter stored). [here] is the station's own
      * room by plan index, for the outline, or -1.
+     *
+     * **And the station's timelapse** (D-319): [readyIn], the whole seconds until a playback may
+     * begin, 0 when it may now (the station's cooldown, or the wait for the history's first frame);
+     * [history], the frames the history holds, one every two seconds.
      */
-    class Terminal internal constructor(val here: Int, val counts: List<Int>, val bands: List<Int>) : OccupancyBeat() {
+    class Terminal internal constructor(
+        val here: Int,
+        val counts: List<Int>,
+        val bands: List<Int>,
+        val readyIn: Int = 0,
+        val history: Int = 0,
+    ) : OccupancyBeat() {
         override fun equals(other: Any?): Boolean =
-            other is Terminal && here == other.here && counts == other.counts && bands == other.bands
-        override fun hashCode(): Int = (here * 31 + counts.hashCode()) * 31 + bands.hashCode()
-        override fun toString(): String = "Terminal(here=$here, counts=$counts, bands=$bands)"
+            other is Terminal && here == other.here && counts == other.counts && bands == other.bands &&
+                readyIn == other.readyIn && history == other.history
+        override fun hashCode(): Int = ((here * 31 + counts.hashCode()) * 31 + bands.hashCode()) * 31 + readyIn * 61 + history
+        override fun toString(): String = "Terminal(here=$here, counts=$counts, bands=$bands, readyIn=$readyIn, history=$history)"
+    }
+
+    /**
+     * **The timelapse playing, to the reader alone** (D-319): the station's history, oldest to
+     * newest, [LAPSE_FRAMES][OccupancyWire.LAPSE_FRAMES] frames a beat. [frames] is how many the
+     * playback plays and [first] the index among them of the first of [counts]; each of [counts] is
+     * one frame's bare counts per room in plan order, and [jammed] says which of them the house was
+     * jammed for (D-186), whose counts are all 0. [here] is the outline, as on a reading. **While it
+     * plays the live view is not sent**: watching the past blinds you to the present (the GDD).
+     */
+    class Lapse internal constructor(
+        val here: Int,
+        val frames: Int,
+        val first: Int,
+        val counts: List<List<Int>>,
+        val jammed: List<Boolean>,
+    ) : OccupancyBeat() {
+        override fun equals(other: Any?): Boolean =
+            other is Lapse && here == other.here && frames == other.frames && first == other.first &&
+                counts == other.counts && jammed == other.jammed
+        override fun hashCode(): Int = (((here * 31 + frames) * 31 + first) * 31 + counts.hashCode()) * 31 + jammed.hashCode()
+        override fun toString(): String = "Lapse(here=$here, frames=$frames, first=$first, counts=$counts, jammed=$jammed)"
     }
 
     /** **True occupancy, to the couch** (M12): per room in plan order, the living seats the house places there. */
@@ -73,11 +118,28 @@ sealed class OccupancyBeat {
          * for a room nobody has sensed in this shift, which is drawn as 0 in the cold band (a hole
          * and an empty room are the same fact, `gdd.md:524`). [here] is the station's room, or -1.
          */
-        fun terminal(here: Int, views: List<ObservationView?>): Terminal = Terminal(
+        fun terminal(here: Int, views: List<ObservationView?>, readyIn: Int = 0, history: Int = 0): Terminal = Terminal(
             here,
             views.map { it?.reportedCount?.coerceIn(0, MOST_COUNT) ?: 0 },
             views.map { it?.staleness?.coerceIn(0, OccupancyWire.COLD) ?: OccupancyWire.COLD },
+            readyIn.coerceIn(0, OccupancyWire.MOST_READY_IN),
+            history.coerceIn(0, OccupancyWire.MOST_FRAMES),
         )
+
+        /**
+         * **A playback's beat** (D-319): frames [first] onwards of a playback of [frames], each one
+         * count per room in plan order, with [jammed] beside each. One to
+         * [OccupancyWire.LAPSE_FRAMES] of them; a jammed frame's counts are sent as 0 whatever it holds.
+         */
+        fun lapse(here: Int, frames: Int, first: Int, counts: List<List<Int>>, jammed: List<Boolean>): Lapse {
+            require(counts.size == jammed.size && counts.size in 1..OccupancyWire.LAPSE_FRAMES) { "a playback's beat carries one to ${OccupancyWire.LAPSE_FRAMES} frames" }
+            require(frames in 1..OccupancyWire.MOST_FRAMES && first >= 0 && first + counts.size <= frames) { "the frames are not inside the playback" }
+            return Lapse(
+                here, frames, first,
+                counts.mapIndexed { f, frame -> frame.map { if (jammed[f]) 0 else it.coerceIn(0, MOST_COUNT) } },
+                jammed,
+            )
+        }
 
         /** **The couch's beat**: one true count per room in plan order. */
         fun outside(counts: List<Int>): Outside = Outside(counts.map { it.coerceIn(0, MOST_COUNT) })
@@ -96,13 +158,28 @@ object OccupancyWire {
     const val KIND_TERMINAL: Int = 1
     const val KIND_OUTSIDE: Int = 2
 
+    /** **A playback's frames** (D-319). */
+    const val KIND_LAPSE: Int = 3
+
+    /** **The frames a playback's beat carries**: a beat's worth at 6×, a frame every third of a second. */
+    const val LAPSE_FRAMES: Int = 3
+
+    /** The most frames a history holds: 2:00 at one every two seconds (`Timelapse.FRAMES`). */
+    const val MOST_FRAMES: Int = 60
+
+    /** The longest READY IN a reading can say, in seconds: a byte. The station's cooldown is at most 2:00. */
+    const val MOST_READY_IN: Int = 255
+
+    /** The bytes before the rooms: the kind, the outline, the rooms, and the timelapse's five. */
+    const val HEADER_BYTES: Int = 8
+
     /** The three bands, as `Observation.stalenessAt` numbers them. */
     const val FRESH: Int = 0
     const val STALE: Int = 1
     const val COLD: Int = 2
 
     /** The field before sealing. */
-    const val PLAIN_BYTES: Int = 3 + MAX_ROOMS
+    const val PLAIN_BYTES: Int = HEADER_BYTES + LAPSE_FRAMES * MAX_ROOMS
 
     /** The field on the wire, sealed: a nonce, the plain bytes, a tag. */
     const val FIELD_BYTES: Int = RangingWire.NONCE_BYTES + PLAIN_BYTES + RangingWire.TAG_BYTES
@@ -133,13 +210,33 @@ object OccupancyWire {
                 into[1] = (if (beat.here in 0 until MAX_ROOMS) beat.here + 1 else 0).toByte()
                 val n = minOf(beat.counts.size, MAX_ROOMS)
                 into[2] = n.toByte()
-                for (i in 0 until n) into[3 + i] = (beat.counts[i] or (beat.bands[i] shl 6)).toByte()
+                into[3] = beat.readyIn.toByte()
+                into[4] = beat.history.toByte()
+                for (i in 0 until n) into[HEADER_BYTES + i] = (beat.counts[i] or (beat.bands[i] shl 6)).toByte()
             }
             is OccupancyBeat.Outside -> {
                 into[0] = KIND_OUTSIDE.toByte()
                 val n = minOf(beat.counts.size, MAX_ROOMS)
                 into[2] = n.toByte()
-                for (i in 0 until n) into[3 + i] = beat.counts[i].toByte()
+                for (i in 0 until n) into[HEADER_BYTES + i] = beat.counts[i].toByte()
+            }
+            is OccupancyBeat.Lapse -> {
+                into[0] = KIND_LAPSE.toByte()
+                into[1] = (if (beat.here in 0 until MAX_ROOMS) beat.here + 1 else 0).toByte()
+                var n = 0
+                for (frame in beat.counts) n = maxOf(n, frame.size)
+                n = minOf(n, MAX_ROOMS)
+                into[2] = n.toByte()
+                into[4] = beat.frames.toByte()
+                into[5] = beat.first.toByte()
+                into[6] = beat.counts.size.toByte()
+                var jams = 0
+                for (f in beat.counts.indices) {
+                    if (beat.jammed[f]) jams = jams or (1 shl f)
+                    val frame = beat.counts[f]
+                    for (i in 0 until minOf(frame.size, n)) into[HEADER_BYTES + f * n + i] = frame[i].toByte()
+                }
+                into[7] = jams.toByte()
             }
         }
     }
@@ -156,31 +253,58 @@ object OccupancyWire {
         val here = plain[1].toInt() and 0xff
         val n = plain[2].toInt() and 0xff
         if (n > MAX_ROOMS) return null
-        for (i in 3 + n until PLAIN_BYTES) if (plain[i].toInt() != 0) return null
+        val b3 = plain[3].toInt() and 0xff
+        val b4 = plain[4].toInt() and 0xff
+        val b5 = plain[5].toInt() and 0xff
+        val b6 = plain[6].toInt() and 0xff
+        val b7 = plain[7].toInt() and 0xff
+        // The room bytes a kind may use: a playback's frames one after another, any other kind one set.
+        val used = if (kind == KIND_LAPSE) b6 * n else n
+        if (used > LAPSE_FRAMES * MAX_ROOMS) return null
+        for (i in HEADER_BYTES + used until PLAIN_BYTES) if (plain[i].toInt() != 0) return null
         return when (kind) {
-            KIND_NOTHING -> if (here == 0 && n == 0) OccupancyBeat.Nothing else null
+            KIND_NOTHING ->
+                if (here == 0 && n == 0 && b3 == 0 && b4 == 0 && b5 == 0 && b6 == 0 && b7 == 0) OccupancyBeat.Nothing else null
             KIND_TERMINAL -> {
-                if (here > n) return null
+                if (here > n || b4 > MOST_FRAMES || b5 != 0 || b6 != 0 || b7 != 0) return null
                 val counts = ArrayList<Int>(n)
                 val bands = ArrayList<Int>(n)
                 for (i in 0 until n) {
-                    val b = plain[3 + i].toInt() and 0xff
+                    val b = plain[HEADER_BYTES + i].toInt() and 0xff
                     val band = b ushr 6
                     if (band > COLD) return null
                     counts += b and 0x3f
                     bands += band
                 }
-                OccupancyBeat.Terminal(here - 1, counts, bands)
+                OccupancyBeat.Terminal(here - 1, counts, bands, b3, b4)
             }
             KIND_OUTSIDE -> {
-                if (here != 0) return null
+                if (here != 0 || b3 != 0 || b4 != 0 || b5 != 0 || b6 != 0 || b7 != 0) return null
                 val counts = ArrayList<Int>(n)
                 for (i in 0 until n) {
-                    val b = plain[3 + i].toInt() and 0xff
+                    val b = plain[HEADER_BYTES + i].toInt() and 0xff
                     if (b > OccupancyBeat.MOST_COUNT) return null
                     counts += b
                 }
                 OccupancyBeat.Outside(counts)
+            }
+            KIND_LAPSE -> {
+                if (here > n || b3 != 0 || b4 !in 1..MOST_FRAMES || b6 !in 1..LAPSE_FRAMES || b5 + b6 > b4) return null
+                if (b7 ushr b6 != 0) return null
+                val frames = ArrayList<List<Int>>(b6)
+                val jammed = ArrayList<Boolean>(b6)
+                for (f in 0 until b6) {
+                    val jam = (b7 ushr f) and 1 == 1
+                    val counts = ArrayList<Int>(n)
+                    for (i in 0 until n) {
+                        val b = plain[HEADER_BYTES + f * n + i].toInt() and 0xff
+                        if (b > OccupancyBeat.MOST_COUNT || (jam && b != 0)) return null
+                        counts += b
+                    }
+                    frames += counts
+                    jammed += jam
+                }
+                OccupancyBeat.Lapse(here - 1, b4, b5, frames, jammed)
             }
             else -> null
         }

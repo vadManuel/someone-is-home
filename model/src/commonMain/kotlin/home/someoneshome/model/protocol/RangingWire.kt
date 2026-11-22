@@ -604,8 +604,8 @@ internal object Base64Url {
  * keys are derived once and kept (up to [KEYS_KEPT] seeds).
  */
 class RangingCodec : RangingReportView {
-    private val field = ByteArray(maxOf(RangingWire.REPORT_FIELD_BYTES, RangingWire.PLAN_FIELD_BYTES))
-    private val chars = CharArray(maxOf(RangingWire.REPORT_CHARS, RangingWire.PLAN_CHARS))
+    private val field = ByteArray(maxOf(RangingWire.REPORT_FIELD_BYTES, RangingWire.PLAN_FIELD_BYTES, OccupancyWire.FIELD_BYTES))
+    private val chars = CharArray(maxOf(RangingWire.REPORT_CHARS, RangingWire.PLAN_CHARS, RangingWire.charsFor(OccupancyWire.FIELD_BYTES)))
     private val derive = ByteArray(1 + RangingWire.NONCE_BYTES)
     private val stream = ByteArray(Sha256.DIGEST_BYTES + 4)
     private val block = ByteArray(Sha256.DIGEST_BYTES)

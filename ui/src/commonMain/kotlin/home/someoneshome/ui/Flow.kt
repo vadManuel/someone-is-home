@@ -210,7 +210,9 @@ object ScreenGraph {
         ScreenId.Files -> setOf(ScreenId.Home)
         // **The live view is opened by the house and left by the player** (D-199). See
         // [Flow.houseOpened]: nothing walks to it except its own timelapse coming back.
-        ScreenId.TermLive -> setOf(ScreenId.Home, ScreenId.Timelapse)
+        // TIMELAPSE walks nowhere: it asks the house, and the playback opens on the house's frames
+        // (D-319), so its edge is in [Flow.viaActions].
+        ScreenId.TermLive -> setOf(ScreenId.Home)
         ScreenId.Timelapse -> setOf(ScreenId.TermLive)
         ScreenId.Reveal -> setOf(ScreenId.Home, ScreenId.RevealThread)
         ScreenId.RevealThread -> setOf(ScreenId.Reveal)
@@ -875,6 +877,9 @@ object Flow {
         ScreenId.Join to setOf(ScreenId.Lobby),
         // A tap on the plan, landing on a room.
         ScreenId.Editor to setOf(ScreenId.RoomEdit),
+        // **TIMELAPSE** (D-319): on a housed phone it asks the house and the playback opens on the
+        // house's first frames (`FlowModel.occupancySaid`), so the press publishes no walk.
+        ScreenId.TermLive to setOf(ScreenId.Timelapse),
         // The STAIRS chip on an occupied room, and the confirmation that answers it.
         ScreenId.RoomEdit to setOf(ScreenId.StairsWarn),
         ScreenId.StairsWarn to setOf(ScreenId.Editor),
@@ -996,9 +1001,9 @@ fun PanelState.arrivingAt(id: ScreenId): PanelState = when (id) {
     //
     // **And the page a report took over is forgotten by every arrival** (D-307): only the arrival at
     // the report screen sets it again ([FlowModel.reportSaid]).
-    ScreenId.Revoked -> copy(screen = id, outBy = OutBy.Revoked, verdict = null, egressAlertUp = false, reportFrom = null)
-    ScreenId.Restrained -> copy(screen = id, outBy = OutBy.Restrained, verdict = null, egressAlertUp = false, reportFrom = null)
-    else -> copy(screen = id, verdict = null, egressAlertUp = false, reportFrom = null)
+    ScreenId.Revoked -> copy(screen = id, outBy = OutBy.Revoked, verdict = null, egressAlertUp = false, quietUp = null, reportFrom = null)
+    ScreenId.Restrained -> copy(screen = id, outBy = OutBy.Restrained, verdict = null, egressAlertUp = false, quietUp = null, reportFrom = null)
+    else -> copy(screen = id, verdict = null, egressAlertUp = false, quietUp = null, reportFrom = null)
 }
 
 /**
@@ -1379,6 +1384,14 @@ class FlowModel(
      * you just walked out of is not somewhere the phone may walk back into.
      */
     fun go(to: ScreenId) {
+        // **The playback goes back to the live view it came from** (D-319): STOP, or the house's
+        // playback ending, is the trail's own step back, so BACK on the live view after it is the
+        // live view's BACK and not a walk into a playback that is over.
+        if (state.screen == ScreenId.Timelapse && to == ScreenId.TermLive && trail.lastOrNull() == ScreenId.TermLive) {
+            trail.removeLast()
+            arrive(state.arrivingAt(to))
+            return
+        }
         if (state.screen in Flow.houseDriving) trail.clear() else remember(state.screen)
         arrive(state.arrivingAt(to))
     }
@@ -1447,6 +1460,15 @@ class FlowModel(
         // way off the live view cannot forget to make it. The actor and nothing else.
         val leftTheStation = moved && state.screen in Flow.atTheStation &&
             next.screen !in Flow.atTheStation
+        // **Leaving a playback the house is still playing is STOP** (D-319): STOP THE PLAYBACK, BACK,
+        // or any way off the screen. Not when the house ended it, because then the beat that said so
+        // dropped the playback first ([occupancySaid]). Off the station altogether, the reading
+        // ending is enough: the house ends a playback whose reader no longer holds the station.
+        val stoppedThePlayback = moved && state.screen == ScreenId.Timelapse && state.lapseBeat != null &&
+            next.screen == ScreenId.TermLive
+        // **The storey tapped on the strip is the screen's** (D-319): kept between the live view and
+        // its playback, dropped everywhere else, so each visit opens on its own storey.
+        val keepsTheStorey = !moved || (state.screen in Flow.atTheStation && next.screen in Flow.atTheStation)
         val beginning = moved && next.screen in MeetingModel.STARTS
         if (beginning) {
             meeting.meetingBegan()
@@ -1456,13 +1478,64 @@ class FlowModel(
             // fixture, because it is a real vote that really happened to these people.
             selections.clear()
         }
-        state = if (beginning) next.copy(ballots = null) else next
+        val landed = if (beginning) next.copy(ballots = null) else next
+        // A playback this phone stopped, or walked off the station from, is not drawn again.
+        val dropsThePlayback = stoppedThePlayback || leftTheStation
+        state = when {
+            dropsThePlayback && !keepsTheStorey -> landed.copy(lapseBeat = null, lapseShown = 0, storeyShown = null)
+            dropsThePlayback -> landed.copy(lapseBeat = null, lapseShown = 0)
+            !keepsTheStorey -> landed.copy(storeyShown = null)
+            else -> landed
+        }
         // **After the state, so that whatever the app root does about it reads the screen this
         // phone is actually on.** The two things it does — stopping a ring, buzzing a Subroutine's
         // question — are both answers to *where the player is now*, and a report made before the
         // move would be answering about where they were.
         if (moved) onScreen(next.screen)
+        if (stoppedThePlayback) send(IntentMessage.StopTimelapse)
         if (leftTheStation) send(IntentMessage.LeaveTerminal)
+    }
+
+    // ---- The Terminal's floors and its timelapse (D-319) -----------------------------------------
+
+    /**
+     * **TIMELAPSE pressed** (D-319). On a housed phone it asks the house, which decides from the
+     * station (its cooldown, its history, this phone holding it), and the playback screen opens on
+     * the house's first frames ([occupancySaid]), not on the press: a phone that walked in first would
+     * be walked back out by a beat answered before the request arrived. In the harness, with no house,
+     * the press opens the fixture's playback, as it always did.
+     */
+    fun playTimelapse() {
+        if (!state.houseAttached) {
+            go(ScreenId.Timelapse)
+            return
+        }
+        lapseAsked = true
+        send(IntentMessage.PlayTimelapse)
+    }
+
+    /** TIMELAPSE was pressed and the house has not yet answered with a playback. */
+    private var lapseAsked = false
+
+    /**
+     * **A storey tapped on the floor strip** (D-319, the owner's ruling: *there's only one terminal in
+     * the entire home, so you must be able to see all floors by tapping the strip to switch*). Input
+     * echo: every storey's counts are already in the field (D-316), so the strip chooses which storey
+     * is drawn and nothing goes up.
+     */
+    fun showStorey(storey: Int) {
+        if (state.storeyShown != storey) state = state.copy(storeyShown = storey)
+    }
+
+    /**
+     * **The next of the beat's frames** (D-319), a third of a second after the last: called by
+     * [FlowHost] for the beat it was started for, so a beat that has already been replaced moves
+     * nothing. The frame switches; nothing tweens (rule 5).
+     */
+    fun lapseStepped(beat: OccupancyBeat.Lapse, shown: Int) {
+        if (state.lapseBeat === beat && shown in beat.counts.indices && state.lapseShown != shown) {
+            state = state.copy(lapseShown = shown)
+        }
     }
 
     // ---- The Surge, five seconds of it (D-182) ---------------------------------------------------
@@ -2978,8 +3051,10 @@ class FlowModel(
             // **It lands the same on the firing Insider's phone as on a Resident's**, which is what
             // `gdd.md:398` asks for and is why the fire itself sets nothing. The window runs itself
             // off (`FlowHost`), which is the ring's presentation timer one message over.
-            is RoundMessage.StaticOpened ->
+            is RoundMessage.StaticOpened -> {
                 state = state.copy(staticJam = StaticJam(message.seconds, message.seed))
+                monitoringJammed()
+            }
 
             is RoundMessage.SubroutineGraded -> state = state.copy(
                 verdict = if (message.accepted) SubroutineVerdict.Accepted else SubroutineVerdict.Rejected,
@@ -3733,6 +3808,30 @@ class FlowModel(
      * The dim comes back on its own: `Flow.autoAdvance` walks a heavy banner off after
      * [HEAVY_HOLD], and the screen it lands on has no heavy notification on it.
      */
+    /**
+     * **MONITORING JAMMED** (D-319, the owner's ruling). Every living phone is sent the jam
+     * (`STATIC_OPENED`, both living classes and no out one: *ghosts are exempt*, D-186), so every
+     * living phone raises this and no out phone can. The house's quiet text: kept in the house
+     * thread and on the lock screen like every later text (D-105, D-119), no dim and no buzz (D-118).
+     * **It stands over the screen it lands on** ([PanelState.quietUp]) rather than walking the phone
+     * to page 1, so the reader stays at the station under the jam and work stays where it was; on the
+     * lock screen it lands under the clock, and on a screen the house is driving it waits there, as
+     * every quiet notification does.
+     */
+    private fun monitoringJammed() {
+        // Never on an out phone: the house sends it no jam, and a phone that is out says nothing
+        // about the house's monitoring even if a frame arrived that it should not have.
+        if (state.outBy != null) return
+        val text = HouseText(landedAt() ?: PanelVals.NO_READING, Notifications.MONITORING_JAMMED)
+        state = state.copy(houseTexts = state.houseTexts + text)
+        notifications.houseSent(Notifications.houseText(text))
+        when {
+            state.screen in Flow.houseDriving -> Unit
+            state.screen == ScreenId.Lock -> push(ScreenId.LockNotify)
+            else -> state = state.copy(quietUp = text)
+        }
+    }
+
     private fun arrived(banner: ScreenId) {
         if (state.screen in Flow.houseDriving) return
         push(if (state.screen == ScreenId.Lock) ScreenId.LockNotify else banner)
@@ -3826,11 +3925,26 @@ class FlowModel(
      * with.
      */
     fun occupancySaid(beat: OccupancyBeat) {
+        // **A playback's frames** (D-319): held instead of the live view, which the house stops
+        // sending while its reader watches the past. The playback screen opens on them when this
+        // phone asked for it; a beat left over from a playback this phone just stopped opens nothing.
+        if (beat is OccupancyBeat.Lapse) {
+            if (beat != state.lapseBeat) state = state.copy(lapseBeat = beat, lapseShown = 0, terminalBeat = null, outsideBeat = null)
+            if (lapseAsked && state.screen == ScreenId.TermLive) {
+                lapseAsked = false
+                go(ScreenId.Timelapse)
+            }
+            return
+        }
         val terminal = beat as? OccupancyBeat.Terminal
         val outside = beat as? OccupancyBeat.Outside
-        if (terminal != state.terminalBeat || outside != state.outsideBeat) {
-            state = state.copy(terminalBeat = terminal, outsideBeat = outside)
+        val playedOut = state.lapseBeat != null
+        if (terminal != state.terminalBeat || outside != state.outsideBeat || playedOut) {
+            state = state.copy(terminalBeat = terminal, outsideBeat = outside, lapseBeat = null, lapseShown = 0)
         }
+        // **The house ended the playback** (it played out): back to the live view it came from. The
+        // playback was dropped above, so this is not a STOP.
+        if (terminal != null && state.screen == ScreenId.Timelapse) go(ScreenId.TermLive)
     }
 
     fun reportSaid(slot: ReportSlot) {
@@ -4010,7 +4124,12 @@ class FlowModel(
         // **Over a Subroutine there is nowhere to go** (E1, D-297): `under` is the screen the phone
         // is already on, and a walk to it would be an arrival, which drops the verdict and restarts
         // nothing the person asked to restart. The alert comes down and the work is where it was.
-        if (state.egressAlertUp) state = state.copy(egressAlertUp = false) else go(arrival.under)
+        when {
+            state.egressAlertUp -> state = state.copy(egressAlertUp = false)
+            // Over the screen it landed on (D-319): it comes down and the screen stays.
+            state.quietUp != null -> state = state.copy(quietUp = null)
+            else -> go(arrival.under)
+        }
     }
 
     /**
@@ -4040,6 +4159,8 @@ class FlowModel(
         fireSurge = ::fireSurge,
         fireIsolate = ::fireIsolate,
         fireStatic = ::fireStatic,
+        playTimelapse = ::playTimelapse,
+        showStorey = ::showStorey,
         toggleMarkers = ::toggleMarkers,
         toggleTorch = ::toggleTorch,
         pickRoomType = ::pickRoomType,
@@ -4234,6 +4355,20 @@ fun FlowHost(
         }
     }
 
+    // **A playback's frames, a third of a second each** (D-319): 2 s of history at 6×. The house
+    // sends a beat's three and this shows the next of them on time, keyed on the beat, so the next
+    // beat restarts it on its own frames. A presentation timer like the jam's: the frames are the
+    // house's, the switch is instant, and nothing is drawn between them (rule 5).
+    val lapse = model.state.lapseBeat
+    LaunchedEffect(lapse) {
+        if (lapse != null) {
+            for (shown in 1 until lapse.counts.size) {
+                delay(LAPSE_FRAME_MS)
+                model.lapseStepped(lapse, shown)
+            }
+        }
+    }
+
     // **Every clock the house started, read against the moment its push arrived** (D-239: page 2's
     // three; D-243: the meeting phase's and the Egress's; V4, D-269). One loop for the life of the
     // model, keyed on nothing that changes: it was keyed on the clocks' values, so every second and
@@ -4339,3 +4474,6 @@ private const val MIN_CLOCK_MILLIS: Long = 16L
  * nowhere else.
  */
 private val LOBBY_SCREENS: Set<ScreenId> = setOf(ScreenId.Lobby, ScreenId.Secret)
+
+/** **A playback frame's time on screen** (D-319): two seconds of history at 6×, a third of a second. */
+internal const val LAPSE_FRAME_MS: Long = 2_000L / 6

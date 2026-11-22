@@ -238,7 +238,7 @@ fun Ghost3Screen(vals: PanelVals) {
         // The port's bungalow and its counts in the harness; on a housed phone the home's plan and
         // the house's true occupancy (D-316), or the empty frame until the house has said both.
         val map = vals.trueMap
-        if (map != null) FloorStrip(Palette.DARK, map.storeys, map.storey)
+        if (map != null) FloorStrip(Palette.DARK, map.storeys, map.storey, map.pick())
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (map != null) KitLivePlan(map, Modifier.fillMaxSize()) else NoPlan(Modifier.fillMaxSize())
         }

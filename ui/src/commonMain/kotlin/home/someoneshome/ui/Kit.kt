@@ -370,9 +370,11 @@ fun KitSecondary(
     height: Dp = 56.dp,
     edge: Color = if (palette.bone) palette.ink else palette.line,
     edgeWidth: Dp = 1.dp,
+    /** The words' ink: the palette's, or its dim for a control that cannot be pressed yet (D-319). */
+    ink: Color = palette.ink,
     onClick: (() -> Unit)?,
 ) = KitButtonBox(
-    text, modifier.height(height).border(edgeWidth, edge), palette.ink, size, 0.04, onClick,
+    text, modifier.height(height).border(edgeWidth, edge), ink, size, 0.04, onClick,
 )
 
 /** `kit.py`'s `quiet`: no border, 56 tall, in the palette's mid. */

@@ -314,6 +314,12 @@ class LiveMap(
     val here: Int,
     val storeys: List<String>,
     val storey: Int,
+    /**
+     * **Whether tapping the floor strip changes what is drawn** (D-319): a home the house sent with
+     * more than one storey. The fixture's bungalow draws one storey under GROUND and UPPER, so its
+     * strip stays a reading.
+     */
+    val switchable: Boolean = false,
 ) {
     /** The room index at [row], [col], or -1 for an unpainted square or one off the grid. */
     fun roomAt(row: Int, col: Int): Int =
@@ -321,7 +327,8 @@ class LiveMap(
 
     override fun equals(other: Any?): Boolean =
         other is LiveMap && cols == other.cols && rows == other.rows && cells.contentEquals(other.cells) &&
-            rooms == other.rooms && here == other.here && storeys == other.storeys && storey == other.storey
+            rooms == other.rooms && here == other.here && storeys == other.storeys && storey == other.storey &&
+            switchable == other.switchable
 
     override fun hashCode(): Int = (cells.contentHashCode() * 31 + rooms.hashCode()) * 31 + here
 
@@ -365,8 +372,11 @@ class LiveMap(
          * fixture's centre, and for any other shape is the room's own cell nearest that middle, so
          * a count never sits in a room it does not count.
          */
-        fun of(plan: HomePlanView, here: Int, counts: (Int) -> Pair<Int, Color>?): LiveMap {
-            val shown = plan.storeys.indices.firstOrNull { s -> here >= 0 && plan.storeys[s].cells.contains(here) }
+        fun of(plan: HomePlanView, here: Int, storey: Int? = null, counts: (Int) -> Pair<Int, Color>?): LiveMap {
+            // **The storey tapped on the strip, or the one the screen opens on** (D-319): every
+            // storey's counts are in the field, so the strip only chooses which is drawn.
+            val shown = storey?.takeIf { it in plan.storeys.indices }
+                ?: plan.storeys.indices.firstOrNull { s -> here >= 0 && plan.storeys[s].cells.contains(here) }
                 ?: 0
             val storey = plan.storeys.getOrNull(shown)
             val sCols = storey?.cols ?: 0
@@ -410,7 +420,10 @@ class LiveMap(
                     )
                 }
             }
-            return LiveMap(cols, rows, cells, rooms, if (rooms.getOrNull(here)?.drawn == true) here else -1, plan.storeys.map { it.name }, shown)
+            return LiveMap(
+                cols, rows, cells, rooms, if (rooms.getOrNull(here)?.drawn == true) here else -1, plan.storeys.map { it.name }, shown,
+                switchable = plan.storeys.size > 1,
+            )
         }
     }
 }

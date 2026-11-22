@@ -715,13 +715,21 @@ fun FilesScreen(vals: PanelVals) {
  */
 @Composable
 fun TermLiveScreen(vals: PanelVals) {
-    val go = navigator()
+    val actions = LocalActions.current
     TerminalView("TERMINAL . LIVE", ScreenId.Home, vals.terminalMap, vals) {
         // **Reading is an uncompletable task, so the motion budget applies** (`gdd.md:476`, D-199).
         // Standing still, glowing, at a place everybody knows: move too much and the view closes,
         // and *the exposure is the limit* rather than a timer.
         KitBudgetRow()
-        KitSecondary("TIMELAPSE . 2:00 AT 6X", Palette.DARK) { go(ScreenId.Timelapse) }
+        // **The station's one gated resource** (D-319). Ready, it asks the house for the playback;
+        // cooling down or with no history yet, it is dimmed in the dim ink, takes no press, and says
+        // how long: `TIMELAPSE . READY IN m:ss` (the owner's words). The cooldown is the station's,
+        // so a reader who just arrived can find it cooling from somebody else's playback.
+        val p = Palette.DARK
+        KitSecondary(
+            vals.timelapseLabel, p, ink = if (vals.timelapseReady) p.ink else p.dim,
+            onClick = if (vals.timelapseReady) actions.playTimelapse else null,
+        )
     }
 }
 
@@ -737,19 +745,19 @@ fun TermLiveScreen(vals: PanelVals) {
  * one**: a scar in the playback that says *something was hidden here, at this time*, without saying
  * what or by whom. A player who watches it back learns the window and nothing inside it.
  *
- * ⚠️ **What is drawn here is a jam over a FIXTURE playback**, because that is what this screen is:
- * E8 is design-complete and build-pending, there is no recorded history behind the numbers, and
- * nothing on this phone yet knows which second of a playback it is showing. So the noise appears
- * while the house says the monitoring is jammed, which is the right picture for the wrong reason —
- * and the seconds-crossing-the-window arithmetic belongs to whoever builds the real playback. It is
- * `PlanCounts`' own position exactly: the fixture is the screen until the history exists.
+ * **Built** (D-319): the house keeps the station's history, a frame of bare counts every two
+ * seconds, and sends its reader the playback three frames a beat, each shown for a third of a
+ * second ([PanelVals.timelapseMap]). A frame taken while the house was jammed carries nothing but
+ * that, and plays as Static's noise over the plan with no counts under it ([PanelVals.lapseNoise]).
+ * A jam that lands *now* veils this screen as it veils the live view: both are monitoring surfaces.
+ * The harness still draws the fixture's playback, with no house.
  */
 @Composable
 fun TimelapseScreen(vals: PanelVals) {
     val go = navigator()
-    TerminalView("TERMINAL . ${vals.timelapseAt}", ScreenId.TermLive, vals.timelapseMap, vals) {
-        // How far through the two minutes the playback is. A fixture, like the counts, and empty on
-        // a housed phone (D-257).
+    TerminalView("TERMINAL . ${vals.timelapseAt}", ScreenId.TermLive, vals.timelapseMap, vals, played = vals.lapseNoise) {
+        // How far through the history the playback is: the house's frames (D-319), the fixture's in
+        // the harness.
         Box(Modifier.fillMaxWidth().height(8.dp).border(1.dp, Ramp.Faint)) {
             Box(Modifier.fillMaxWidth(vals.timelapsePlayed).fillMaxHeight().background(Ramp.Mid))
         }
@@ -773,6 +781,8 @@ private fun TerminalView(
     back: ScreenId,
     map: LiveMap?,
     vals: PanelVals,
+    /** A playback frame the house was jammed for, as its noise and frame (D-319); the playback's only. */
+    played: Pair<StaticJam, Int>? = null,
     foot: @Composable ColumnScope.() -> Unit,
 ) {
     val p = Palette.DARK
@@ -780,9 +790,11 @@ private fun TerminalView(
         KitHeader(title, p, back = back)
         // The plan's floors go with the plan: the bungalow's GROUND and UPPER in the harness, the
         // home's own storeys on a housed phone (D-257, D-316).
-        if (map != null) FloorStrip(p, map.storeys, map.storey)
+        if (map != null) FloorStrip(p, map.storeys, map.storey, map.pick())
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (map != null) KitLivePlan(map, Modifier.fillMaxSize()) else NoPlan(Modifier.fillMaxSize())
+            // A playback frame the house was jammed for (D-319), then a jam landing now (D-186).
+            played?.let { (jam, frame) -> StaticNoise(jam, Modifier.fillMaxSize(), frame) }
             vals.staticJam?.let { StaticNoise(it, Modifier.fillMaxSize()) }
         }
         foot()
@@ -805,16 +817,22 @@ internal fun NoPlan(modifier: Modifier = Modifier) {
 }
 
 /**
- * GROUND / UPPER: **a reading, not a control** (`kit.py`'s `floor_strip`). The floor drawn sits on
- * the room fill; the shipped strip takes no taps. [storeys] are the plan's own, in plan order, one
- * cell each (the bungalow's two in the harness, the home's on a housed phone, D-316), and [shown]
- * is the one the plan below draws.
+ * GROUND / UPPER (`kit.py`'s `floor_strip`): the floor drawn sits on the room fill. [storeys] are
+ * the plan's own, in plan order, one cell each (the bungalow's two in the harness, the home's on a
+ * housed phone, D-316), and [shown] is the one the plan below draws.
+ *
+ * **A control on a home of more than one storey** (D-319, the owner's ruling: *there's only one
+ * terminal in the entire home, so you must be able to see all floors by tapping the strip to
+ * switch*): a tap on a storey's cell draws that storey, through [onPick]. Its look does not change;
+ * the storey drawn is the one on the room fill, as before. Null [onPick] is the reading it was:
+ * the fixture's bungalow, and a home of one storey.
  */
 @Composable
-internal fun FloorStrip(p: Palette, storeys: List<String>, shown: Int) {
+internal fun FloorStrip(p: Palette, storeys: List<String>, shown: Int, onPick: ((Int) -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().height(44.dp).border(1.dp, p.line)) {
         storeys.forEachIndexed { i, name ->
             var cell = Modifier.weight(1f).fillMaxHeight()
+            if (onPick != null) cell = cell.tap { onPick(i) }
             if (i == shown) cell = cell.background(Ramp.Fill)
             if (i < storeys.lastIndex) cell = cell.edgeLine(PanelSide.End, p.line, 1.dp)
             Box(cell, contentAlignment = Alignment.Center) {
@@ -944,3 +962,10 @@ private fun PulseControl(taps: Int) {
         KitMeter(Balance.SYNC_PULSE_BEATS, taps, Ramp.Ink, Ramp.Faint)
     }
 }
+
+/**
+ * **The floor strip's press, for a map that can switch storeys** (D-319), or null for one that
+ * cannot: the bungalow's, and a home of one storey.
+ */
+@Composable
+internal fun LiveMap.pick(): ((Int) -> Unit)? = if (switchable) LocalActions.current.showStorey else null
