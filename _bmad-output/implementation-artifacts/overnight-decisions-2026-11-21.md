@@ -261,3 +261,28 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
      - **Decision 2 (provisional):** motion isn't charged while this phone is buzzing, plus a short tail.
   4. **Likely:** a reconnecting phone could forget the disk it carries. To be checked, and fixed if real.
   5. **Likely:** the lobby's NEARBY DEVICES check could let go a seat that was just armed. A late answer now goes to the round.
+- **D-327 merged** (`f8f67cf`). 3,666 tests in the default check, 4,175 across the three builds, 0 failures; rehearsal 21/21.
+  1. **"you're up" and other quiet texts now stand over the current screen.** On a Subroutine, the Terminal, the caught scan or the camera, nothing is lost and nothing is sent. Pages 1 and 2 behave as before.
+  2. **A chain release is refused during a meeting** and minted after it.
+  3. **The phone's own buzz no longer spends the motion budget**, with a 150 ms tail (provisional).
+  4. **The disk on reconnect was not a real bug:** the house replays the round to a returning phone. A test now pins it.
+  5. **A seat that has just been armed is kept** if a late lobby check answers.
+     - **Still open for you:** if the probe answers before the phone has heard any arming push, it can't know. Closing that gap needs a small protocol change. Even then, the house keeps the seat and the player rejoins by token.
+     - I also changed one D-326 trigger: a later round's push now counts as armed, not as a lobby check. Please confirm.
+
+### Morning summary, 2026-11-23
+
+- **Main:** `f8f67cf`, all pushed. Every module passes, as do the rehearsal and e2e, and the iPhone Playtest build compiles.
+- **Built since yesterday morning:**
+  - **The map:** the Terminal and couch with live counts and floor switching, and the timelapse.
+  - **Lobby:** settings with your ranges; NOT A MARKER for foreign cards.
+  - **Feedback:** verdict buzzes, MONITORING JAMMED, no sound at all.
+  - **The work order:** mixed by structure, with chains among Residents, carrying, Array Wipe, Memory Dump.
+  - **Movement and permissions:** the motion budget; four permissions, without Notifications.
+  - **Fixes:** this night's review fixes.
+- **Questions for you:**
+  - lazy linking (5 open points, D-324);
+  - the motion numbers, tuned on phones, and the stillness rule (D-321);
+  - whether walking during Memory Dump should close its screen;
+  - the lobby probe gap and the changed D-326 trigger (D-327).
+- **Ready for the phone test:** `phone-session-2026-11-19.md` has a line for each new piece. Use the Playtest build on three phones, plus a fourth for the mid-round join.
