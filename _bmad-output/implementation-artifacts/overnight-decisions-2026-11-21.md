@@ -231,3 +231,7 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
   - **The two-pulse "no":** the same everywhere.
   - **The meeting percentage:** stays exact.
   - **The Release build:** not yet.
+
+## Night of 2026-11-22
+
+- **The design mockup (Claude Design project) is updated:** the Notes tile and screen are gone, MESSAGES moves up a slot, and the gallery entry and the "RESEED BACKLOG AND NOTES" label are cleaned. Previewed before publishing (version 18). Generator changes are in `f308821`.
