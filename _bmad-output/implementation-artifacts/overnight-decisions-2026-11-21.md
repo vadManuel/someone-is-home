@@ -173,3 +173,19 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
   - The Terminal shows only the station's own storey.
   - The plan now goes to every phone at arming (provisional; it amends D-186 and D-271).
 - **Open from D-317:** ranges and steps for the three settings, and whether the map proposes the Egress timer.
+- **Merged:** D-316, D-317 and D-318, integrated as `ead4393`. Recording format 48; 3,389 tests, 0 failures; rehearsal 21/21.
+- **Rulings on the map and lobby:**
+  - **Lobby ranges:** DISCUSSION 60/90/120 s, EGRESS TIMER 90/120/150 s, REVOKE COOLDOWN 45/60/90 s.
+  - **Floors:** the GROUND/UPPER strip is tappable on the Terminal and the couch (one Terminal for the whole home).
+  - **The plan:** goes to every phone at arming (D-316 kept).
+- **Rulings on the timelapse:**
+  - the cooldown belongs to the station;
+  - frames are bare counts, every 2 s;
+  - while unavailable, a dimmed button reading `TIMELAPSE . READY IN m:ss`;
+  - a meeting clears it.
+- **Building now:**
+  - D-319: floors, timelapse, Static banner;
+  - D-320: verdict buzzes, the page-2 line, lobby ranges, GDD fixes, removing sound;
+  - D-322: chains, carrying, Memory Dump, Array Wipe, the scaled mix.
+- **Next:** the motion budget (after D-319), then the design mockup.
+- **Open, unexplained:** the rehearsal's line-leak check once saw an Insider's own line arrive just before ROUND ENDED. It passed on a rerun, and it predates today. To investigate.
