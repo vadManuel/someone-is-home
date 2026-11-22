@@ -298,4 +298,4 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
 - **Memory Dump:** after the pattern, TO <ROOM> shows. PROCEED or walking away goes to the work order. While the pattern is carried, other cards are refused (the meeting card and the Terminal still work).
 - **Wrong card while carrying** (pattern or disk): "CARRYING . GO TO <ROOM>".
 - **Building:** D-328.
-- **Still to answer:** the lobby permission check (the changed D-326 trigger and the tiny pre-arming gap, D-327).
+- **Lobby permission check:** the changed D-326 trigger (a later round's push counts as armed) stays. For the gap just before lights out, the owner chose: "report at the next meeting instead of kicking out a player". A lobby let-go now asks the house first. If the round is already armed, the seat is kept and the switch-off is named at the first meeting. Build as D-329 after D-328.
