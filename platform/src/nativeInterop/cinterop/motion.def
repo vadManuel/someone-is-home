@@ -1,0 +1,51 @@
+# The motion budget's sampler (M2, D-321): Core Motion's device motion at 100 Hz, delivered to
+# Kotlin as three doubles and nothing else.
+#
+# It is C because Kotlin cannot read `CMDeviceMotion.userAcceleration` without allocating: the
+# object arrives as a fresh Kotlin wrapper and the struct as a `CValue`, two heap objects a sample,
+# a hundred times a second, on the main thread (rule 7). Here the struct is read in C and its three
+# fields cross as plain arguments to a `staticCFunction`, so a sample costs the Kotlin heap nothing.
+#
+# Only C types cross: the manager is held on this side, and nothing in the signatures below names an
+# Objective-C class.
+language = Objective-C
+linkerOpts = -framework CoreMotion -framework Foundation
+---
+#import <CoreMotion/CoreMotion.h>
+#import <Foundation/Foundation.h>
+
+typedef void (*sh_motion_sink)(void *context, double x, double y, double z);
+
+static CMMotionManager *sh_motion_manager(void) {
+    static CMMotionManager *manager = nil;
+    if (manager == nil) manager = [[CMMotionManager alloc] init];
+    return manager;
+}
+
+/** 1 if this phone has device motion at all. */
+static inline int sh_motion_available(void) {
+    return sh_motion_manager().deviceMotionAvailable ? 1 : 0;
+}
+
+/**
+ * Starts device motion at `interval` seconds, delivered on the main queue: the panel the budget
+ * closes lives on the main thread, so the samples arrive where they are read. Returns 0 and starts
+ * nothing on a phone without device motion; 1 if it is running, including already.
+ */
+static inline int sh_motion_start(double interval, sh_motion_sink sink, void *context) {
+    CMMotionManager *manager = sh_motion_manager();
+    if (!manager.deviceMotionAvailable) return 0;
+    if (manager.deviceMotionActive) return 1;
+    manager.deviceMotionUpdateInterval = interval;
+    [manager startDeviceMotionUpdatesToQueue:[NSOperationQueue mainQueue]
+                                 withHandler:^(CMDeviceMotion *motion, NSError *error) {
+        if (motion == nil) return;
+        CMAcceleration a = motion.userAcceleration;
+        sink(context, a.x, a.y, a.z);
+    }];
+    return 1;
+}
+
+static inline void sh_motion_stop(void) {
+    [sh_motion_manager() stopDeviceMotionUpdates];
+}

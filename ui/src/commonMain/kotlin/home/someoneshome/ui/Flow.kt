@@ -809,6 +809,26 @@ object Flow {
     val atTheStation: Set<ScreenId> = setOf(ScreenId.TermLive, ScreenId.Timelapse)
 
     /**
+     * **Where the motion budget closes a screen, and it is the screen's own exit** (M2, D-110,
+     * D-203, D-321).
+     *
+     * Every Subroutine to the work order, as STOP NOW goes ([FlowModel.stopSubroutine] makes the
+     * report and the walk); the live view and its playback to the springboard, as BACK and the dock
+     * go, and the walk off the station frees it. **No new route**: each target is one the screen
+     * already leaves by, so a closed screen lands where the player's own exit would have.
+     */
+    val motionCloses: Map<ScreenId, ScreenId> =
+        Subroutine.entries.mapNotNull { it.screen }.associateWith { ScreenId.Work } +
+            atTheStation.associateWith { ScreenId.Home }
+
+    /**
+     * **The screens the motion budget applies to** (M2, `gdd.md:492`, D-199): every Subroutine, and
+     * the station's two, because reading the map is an uncompletable Subroutine. The screens that
+     * draw [KitBudgetRow], and no others.
+     */
+    val motionMeasured: Set<ScreenId> = motionCloses.keys
+
+    /**
      * **The browsing surfaces: the screens a finger may step backwards off.**
      *
      * The owner's finding, in their own words: *no back navigation anywhere — swipe right from the
@@ -1294,6 +1314,15 @@ class FlowModel(
      * OFF THE BEAT and nothing on this screen says why (rule 6).
      */
     private val houseNow: () -> Long? = { null },
+    /**
+     * **The motion sensor, asked to run while the motion budget is** (M2, D-321): true when a
+     * screen the budget applies to opens on a housed phone, false when the phone leaves the last of
+     * them. [onTorch]'s shape: the sensor is `platform`'s, and the app root starts it (behind the
+     * MOTION & FITNESS grant) with [motionSampled] as its sink.
+     *
+     * Defaulted to nothing: every render and every test, whose samples are fed by hand.
+     */
+    private val onMeasuring: (Boolean) -> Unit = {},
 ) {
 
     var state: PanelState by mutableStateOf(initial)
@@ -1359,6 +1388,41 @@ class FlowModel(
      * the circle's draw lambda, written by [reportRead] every frame the report screen is up.
      */
     val report: ReportCircle = ReportCircle()
+
+    /**
+     * **The motion budget, and it is the one thing this phone adjudicates** (M2, D-043, D-321).
+     * Begun on every opening of a screen [Flow.motionMeasured] names, on a housed phone, and ended
+     * when the phone leaves them; fed by [motionSampled].
+     */
+    val motion: MotionBudget = MotionBudget()
+
+    /** **The budget as the row draws it** ([report]'s arrangement): stepped, read only in draw. */
+    val motionBar: MotionBar = MotionBar()
+
+    /**
+     * **One motion sample, a hundred times a second** (M2, D-321): the sensor's sink.
+     *
+     * While the budget runs, the sample is spent against it and the bar is stepped. **The sample that
+     * spends the last of it closes the screen**, and the close is the screen's own exit, so the
+     * phone reports it exactly as the player's thumb would have (D-110, D-111, D-203): off a
+     * Subroutine it is STOP NOW — the window reported shut, actor only, no reason, and the walk to
+     * the work order, where the walk back to the card is the cost; off the station it is the
+     * springboard, and [arrive] frees the station with the actor and nothing else. Both roles take
+     * this one path, and nothing on it reads the role (rule 1).
+     *
+     * Allocates nothing on a sample that changes no step (rule 7, `MotionAllocationTest`).
+     */
+    fun motionSampled(x: Double, y: Double, z: Double) {
+        val spentNow = motion.sample(x, y, z)
+        if (motion.running) motionBar.show(motion.left)
+        if (spentNow) motionSpent()
+    }
+
+    /** The budget is gone: leave by the screen's own exit ([Flow.motionCloses]). */
+    private fun motionSpent() {
+        val to = Flow.motionCloses[state.screen] ?: return
+        if (Subroutine.on(state.screen) != null) stopSubroutine() else go(to)
+    }
 
     /**
      * **The Surge this phone is inside, or null** (D-182).
@@ -1512,6 +1576,12 @@ class FlowModel(
             selections.clear()
         }
         val landed = if (beginning) next.copy(ballots = null) else next
+        // **The motion budget runs on the screens it applies to, on a housed phone** (M2, D-321):
+        // every Subroutine and the station's two. It calibrates afresh on each opening, and moving
+        // between the live view and its playback is one reading (D-203), so one budget.
+        val wasMeasured = motion.running
+        val measured = next.houseAttached && next.screen in Flow.motionMeasured
+        val opensABudget = measured && moved && !(wasMeasured && keepsTheStorey)
         // A playback this phone stopped, or walked off the station from, is not drawn again.
         val dropsThePlayback = stoppedThePlayback || leftTheStation
         state = when {
@@ -1519,6 +1589,15 @@ class FlowModel(
             dropsThePlayback -> landed.copy(lapseBeat = null, lapseShown = 0)
             !keepsTheStorey -> landed.copy(storeyShown = null)
             else -> landed
+        }
+        if (opensABudget) {
+            motion.begin(MotionAllowance.on(next.screen))
+            motionBar.show(1.0)
+            onMeasuring(true)
+        } else if (wasMeasured && !measured) {
+            motion.end()
+            motionBar.show(1.0)
+            onMeasuring(false)
         }
         // **After the state, so that whatever the app root does about it reads the screen this
         // phone is actually on.** The two things it does — stopping a ring, buzzing a Subroutine's
@@ -4534,6 +4613,7 @@ fun FlowHost(
         perms = model.perms,
         lamp = model.lamp,
         report = model.report,
+        motion = model.motionBar,
         // **No input at any point of a Surge** (D-182): the bright phase, the dark one and the Boot
         // render alike. The lamp draws over the panel and holds no finger; this holds every one.
         inputBlocked = surge != null,

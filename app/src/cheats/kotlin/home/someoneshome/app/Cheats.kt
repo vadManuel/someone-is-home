@@ -34,6 +34,8 @@ import home.someoneshome.model.MarkerId
 import home.someoneshome.platform.SeededCardScanner
 import home.someoneshome.platform.clearSeatToken
 import home.someoneshome.platform.devicePermissions
+import home.someoneshome.platform.PermittedMotion
+import home.someoneshome.platform.deviceMotion
 import home.someoneshome.platform.refusedGrants
 import home.someoneshome.platform.requestStanding
 import home.someoneshome.platform.standing
@@ -197,6 +199,11 @@ fun CheatRoot(uwb: Boolean) {
     // seam rebuilt on every visit to that screen would forget the answers between visits — the row
     // would go back to TAP TO GRANT on a phone that had already granted.
     val permissions = remember { devicePermissions() }
+    // **THE MOTION BUDGET'S SENSOR** (M2, D-321): Core Motion at 100 Hz on a phone, a stand-in that
+    // takes no samples on the simulator, and behind the MOTION & FITNESS grant either way, asked at
+    // every start. The panel starts it when a Subroutine or the station opens and stops it when the
+    // phone leaves them; its samples go to the panel's budget and nowhere else. Lines to stdout only.
+    val motion = remember { PermittedMotion.of(deviceMotion { line -> println("[motion] $line") }, permissions) }
     // **THE REGISTRATION CAMERA: back lens, live picture, torch.** Held here because the *screen*
     // owns the session's lifetime — see the DisposableEffect further down — while the object that
     // knows which lens registration uses has to outlive any one visit to it.
@@ -435,6 +442,10 @@ fun CheatRoot(uwb: Boolean) {
             // **The house's clock as this phone measures it** (D-295): what a Sync Pulse tap is
             // stamped with, refreshed every second on the uploads.
             houseNow = link::houseNow,
+            // **The motion budget's samples, while it runs** (M2, D-321). Read off the panel holder,
+            // as `meeting.names` is, because this lambda is handed to the model being built here; it
+            // is called only when a screen the budget applies to opens, a whole lobby later.
+            onMeasuring = measuringWith(motion) { panel.value },
         ).also { panel.value = it }
     }
     // **The Sync Pulse, felt** (D-295): one short buzz on each pulse of the house's grid, through

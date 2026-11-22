@@ -13626,6 +13626,173 @@ the app's XML copied out after each, every result XML counted with a python glob
 
 **The EGRESS line's stop is answered by D-323 B** (the owner, 2026-11-22): each Insider's phone is told the round's Insider count on its role reveal, and `egressSharedBy` reads that count alone, so the lobby inference and the UNKNOWN stop at seven to eleven seats are gone.
 
+### D-321 · **The motion budget is built: Core Motion at 100 Hz on the phone, M2's accumulator calibrated on every opening, and spent, it closes a Subroutine as STOP NOW does and the station as BACK does — built (recording unchanged at 50); every number in it is provisional, the bar's look is provisional, and M2's lower bound is STOPPED for the owner**
+
+**The ruling** (owner, 2026-11-21). *"We should build this"*, of the motion budget the rules audit
+listed as not built (`rules-audit-2026-11-21.md`, *Not built*: *no accelerometer code. `KitBudgetRow`
+is a static label, so D-203's motion release and D-110's "movement cancels" can't fire*). What the
+rulings already said it is:
+
+- **`gdd.md` M2:** *Do not build a classifier — use an accumulator.* Source
+  `CMDeviceMotion.userAcceleration` (gravity removed), magnitude; **100 Hz**; calibration over the
+  *first ~0.5 s on entry, measuring that player's hand steadiness*; the budget *scales with tier* (*a
+  5 s short subroutine can be strict; a 60 s circuit leg cannot*); *a thin draining bar, always
+  visible. Failure must never be a surprise*; *too little motion also fails*; *strict on
+  translation, lenient on rotation*; failure: *Subroutine fails, must rescan.*
+- **D-043:** *100 Hz cannot round-trip … the client computes its own budget and decides its own
+  failure. The only place in the game where a client adjudicates anything.*
+- **D-110:** *Movement cancels, client-side … walking away ends the minigame on their own phone …
+  It is a device-side rule about the player's own phone and adds no report.* And *the walk back is
+  the cost.*
+- **D-203:** the station's lock comes free when *the reader leaves the view … the motion budget
+  closing it … The phone reports it with the actor and nothing else, as STOP NOW does.*
+- **`gdd.md:492`, D-199:** *Viewing is treated as an uncompletable Subroutine, so the motion budget
+  applies … Exceed the budget and the view closes.* The live view and the timelapse both carry the row.
+
+1. **The sensor** (`platform`). `MotionSensor` (start with a sink, stop) and `MotionSink`, a `fun
+   interface` over three doubles, because a `(Double, Double, Double) -> Unit` boxes all three on
+   every call. `deviceMotion()` is `expect`/`actual`: **on a phone, Core Motion's device motion at
+   `MOTION_HZ` = 100 on the main queue, read in C** (`src/nativeInterop/cinterop/motion.def`, the
+   repo's first cinterop, compiled for `iosArm64` alone). Kotlin cannot read
+   `CMDeviceMotion.userAcceleration` without allocating, a fresh wrapper for the object and a
+   `CValue` for the struct, so the struct is read on the C side and its three fields cross as
+   arguments to one `staticCFunction`; the sensor holds one `StableRef` to itself for the app's
+   life, so a sample the OS delivers after a stop finds a null sink and goes nowhere. **On the
+   simulator, a stand-in that takes no samples**, every time, so the budget holds and no bench or
+   rehearsal is walked off a card by a sensor that is not there. **`DrivenMotion`** is the
+   desktop's and the tests' sensor, fed by hand. Rotation is never read (the rotation rate is a
+   separate field this seam does not carry), which is *lenient on rotation* at the source.
+2. **The MOTION & FITNESS grant** (`platform`). `PermittedMotion` starts the sensor only when the row
+   stands GRANTED, asked at every start, so a grant switched off in Settings between cards is kept
+   at the next card. Refused, never asked, asked and unanswered, or not on this phone: nothing is
+   sampled and the budget holds. **The refusal adds no report and no copy**: it is the permission
+   walk's, warned and then named at the meeting (D-310), as before. (Core Motion's device motion
+   needs no authorisation of its own; the gate is the game's.)
+3. **The budget** (`ui` `MotionBudget.kt`). `MotionBudget`, primitives only. On each opening it
+   calibrates over `CALIBRATION_SAMPLES` = 50 (M2's ~0.5 s at 100 Hz): the mean magnitude, times a
+   multiple, clamped between a floor and a ceiling, is this player's limit, so a steadier hand is
+   held to a stricter one and scanning then walking straight off is still caught. After that, every
+   sample over the limit spends what it is over by, in g·s; **still is free, and nothing refills
+   it** (an accumulator; no recovery is ruled). The allowance is the tier's (`MotionAllowance`), and
+   the station's is its own.
+4. **Where it runs** (`ui` `Flow.kt`). `Flow.motionMeasured`: every Subroutine screen and the
+   station's two, the screens that draw the row. It begins on every opening on a housed phone
+   (`FlowModel.arrive`) and ends when the phone leaves them; moving between the live view and its
+   playback is one reading (D-203) and one budget. `onMeasuring` tells the app root to start and stop
+   the sensor; `measuringWith` (`app`) joins it, behind the grant, in `Cheats.kt`. A phone with no
+   house attached (the render harness, the screen picker off a round) never runs it.
+5. **What it closes** (`FlowModel.motionSampled`, `Flow.motionCloses`). The sample that spends the
+   last of it leaves by **the screen's own exit, and nothing new**: off a Subroutine it is
+   `stopSubroutine()`, STOP NOW itself (the window reported shut, `IntentMessage.StopSubroutine`,
+   actor only, no reason, then the work order; the walk back to the card is the cost); off the live
+   view or the timelapse it is the springboard, as BACK and the dock go, and `arrive` frees the
+   station with `IntentMessage.LeaveTerminal`, actor only. No buzz, no notice, no copy: STOP NOW has
+   none. **Both roles take the one path and nothing on it reads the role** (rule 1); an Insider's
+   fake Subroutine closes exactly as a Resident's real one.
+6. **The bar** (`KitBudgetRow`). The row keeps its words, **MOTION BUDGET and HOLDING, and they never
+   change**: HOLDING is the row's only ruled word, so calibrating, draining and at rest all say it.
+   **The row's lower hairline is the draining bar**: the part left in the row's own word ink
+   (`Palette.dim`), the spent part in the hairline's (`Palette.faint`). No light level, colour or
+   type the row did not already have; on Sniff before its answer the palette is black and so is the
+   bar. It is a `MotionBar` float read only in the draw lambda (`ReportCircle`'s arrangement) and
+   stepped in 64ths, so a still hand writes nothing and an opening writes at most 64 times.
+7. **Rule 7.** A sample allocates nothing: the accumulator, the panel's sink and (by construction)
+   the C shim. `MotionAllocationTest` holds the first two to zero bytes over 100 000 samples, still
+   and moving.
+
+**Unruled, and built as provisional constants in one object** (`MotionAllowance`, one name each,
+so the owner's numbers replace them with no second change):
+
+| value | provisional | what it decides |
+|---|---|---|
+| `STEADY_MULTIPLE` | 3.0 × the calibrated mean | how far over this hand's own steadiness counts as moving |
+| `LIMIT_FLOOR_G` | 0.03 g | the strictest a limit can be, however steady the hand |
+| `LIMIT_CEILING_G` | 0.08 g | the loosest, however much the first half second moved |
+| `SHORT` / `MEDIUM` / `LONG` / `CIRCUIT` | 0.2 / 0.35 / 0.6 / 0.8 g·s | each tier's allowance; at ~0.1 g over the limit, about 2 s of walking for a short, 8 s for a circuit leg |
+| `STATION` | 0.35 g·s (a medium's) | reading the map |
+| recovery | none | whether standing still earns any of it back |
+| the bar's look | the lower hairline, word ink over hairline ink, continuous | M2 names *a thin draining bar*; where, in which ink, and segments or a fill are the owner's |
+| the row's other words | none | whether calibrating, draining or nearly gone should say anything but HOLDING |
+
+They are sized from what `userAcceleration` reads in a hand (roughly 0.005–0.02 g) and while
+walking (roughly 0.1–0.3 g a step) and **have not been felt on a phone**. They are the phone's
+constants and not `Balance`'s: the house never computes the budget (D-043), so nothing about it is
+recorded. Making them lobby or arming values would put them in `Balance` and bump the recording.
+
+**STOPPED for the owner: M2's lower bound, *too little motion also fails*.** Not built: nothing
+judges a phone too still. Missing: the noise floor in g below which a phone counts as resting (it
+differs by model, and the two test phones are an iPhone 16 Pro and an iPhone 13 Pro), how long it
+must stay under it, and whether that drains the bar or fails at once. It is the one number here that
+fails an honest player if it is wrong, in the dark, with nothing on the screen to say why, so it
+waits for a measurement on both phones (the phone session's D-321 lines) and a ruling.
+
+**The recording is unchanged at 50.** The cancel is STOP NOW's `StopSubroutine` and the station's
+`LeaveTerminal`, both already recorded; no event, effect, message or balance value changed.
+
+**Tests.** `MotionBudgetTest` (ui, desktop and iOS Simulator, 9 each): the budget drains on movement
+and holds when still, and still never refills it; calibration is the first half second, measures
+the hand (a steadier one is held to more) and catches a scan-and-walk; the allowance rises with the
+tier; passing it on every built Subroutine lands on the work order with `[StopSubroutine]` and the
+sensor started and stopped once; the cancel and STOP NOW leave the identical phone and the identical
+wire; at the station it closes to the springboard with `[LeaveTerminal]`, and from the playback too
+without a second calibration; both roles are cancelled by the same samples into the same phone, on a
+Subroutine and at the station; the bar steps down and is full again on the next opening; nothing
+samples off those screens, on a phone with no house, or after the phone left. `MotionAllocationTest`
+(ui, JVM, 2): zero bytes a sample, still and moving, for the accumulator and the panel's sink.
+`MotionSensorTest` (platform, 5): a granted phone is sampled; every other grant starts nothing and
+delivers nothing; the grant is asked at every start; a stopped sensor delivers nothing; the rate is
+100. `MotionWiringTest` (app, 3): wired as the app root wires it, granted, walking away closes the
+Subroutine and frees the station and the sensor stops; refused (and unasked, asked, unavailable),
+nothing is sampled, the budget does not move, the phone stays and says nothing. `MotionBudgetRender`
+(ui, 3): below.
+
+**Proved red by injection**, each restored and green again, quoted from the XML:
+- **The cancel stopped** (`motionSampled` never calling the close): four of `MotionBudgetTest` red.
+  *Replay: walking away never closed it*; *walking away never closed the live view*; *the cancel
+  and STOP NOW leave the same phone: expected:<[StopSubroutine]> but was:<[]>*; *the bar outlived
+  the opening it drew expected:<1.0> but was:<0.0>*.
+- **A sample that allocates** (the magnitude stored in an `Any?` field, one boxed double a sample):
+  both of `MotionAllocationTest` red. *a still sample: a run allocated 2400000 bytes, a sample's
+  worth (rule 7): [2400000, 2400000, 2400000, 2400000, 2400000]*.
+
+**Rendered and looked at** (`ui/build/screens/d321-*.png`, 600×1300, an iPhone 16 Pro's insets,
+through `FlowHost`, the bar moved by real samples through the sensor's sink). **JAM** (medium) full:
+MOTION BUDGET and HOLDING between two hairlines, the lower one lit end to end in the words' ink;
+half: lit to the middle, the right half back to the hairline ink; at the edge: a stub of lit line at
+the left and the rest the hairline ink; the rings, − and +, SUBMIT and STOP NOW unmoved in all
+three. **TERMINAL . LIVE** the same three steps under the plan, above TIMELAPSE . READY IN −.
+**SNIFF before its answer**: black below the status strip at every step, the row and its bar
+included. An Insider's phone is the Resident's pixels at every step on both screens.
+
+**Checked** (on the final tree, `*/build/test-results` cleared first: `./gradlew check --continue`
+with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
+the app's XML copied out after each, every result XML counted with a python glob): model 367 (JVM) +
+348 (iOS Simulator); core 462 + 460; platform 216; ui 830 (desktop) + 410 (iOS Simulator); harness
+138; cards 17; app 305 (the default variant), 182 (Release), 305 (Playtest). **3,553 in the default
+check, 0 failures, 0 errors, 0 skipped**, and the two sweeps 0 failures. The vocabulary lints,
+`redactionLint` and `boundaryCheck` ran and passed. `MotionBudgetTest` (9 desktop, 9 iOS),
+`MotionAllocationTest` (2), `MotionBudgetRender` (3), `MotionSensorTest` (5) and `MotionWiringTest`
+(3, in all three app variants) are in the XML. A dry run of the same sweep before it had one failure,
+`OutboundQueueTest.aSeatThatStopsDrainingDelaysNobodyAndIsDroppedWhenItsQueueIsFull`, the known load
+flake; the final run passed it.
+
+**Not checked anywhere: the sensor on a phone.** The simulator has no device motion and its stand-in
+takes no samples, so nothing above says Core Motion delivers, at what rate, or how a hand reads. The
+shim compiles for `iosArm64`, the Debug framework links with it, and an unsigned device build of
+the app (`xcodebuild -sdk iphoneos`) succeeds; that is all. The phone session's D-321 lines are
+where it is first seen working, and where the provisional numbers are first felt.
+
+| site | before | after |
+|---|---|---|
+| `platform` `MotionSensor.kt` (new), `.iosArm64.kt`, `.iosSimulatorArm64.kt` | no motion code | `MotionSink`, `MotionSensor`, `deviceMotion`, `PermittedMotion`, `DrivenMotion`, `MOTION_HZ` |
+| `platform` `motion.def` (new), `build.gradle.kts` | no cinterop | the Core Motion shim, `iosArm64` only |
+| `ui` `MotionBudget.kt` (new) | — | `MotionBudget`, `MotionAllowance` (provisional), `MotionBar`, `LocalMotionBar` |
+| `ui` `Flow.kt` | the row a label | `Flow.motionMeasured`, `Flow.motionCloses`; `FlowModel.motion`, `motionBar`, `motionSampled`, `onMeasuring`; `arrive` begins and ends it |
+| `ui` `Screen.kt` | — | `motion` provided as `LocalMotionBar` |
+| `ui` `ScreensWork.kt` `KitBudgetRow` | static, *not a draining bar* | the lower hairline drains |
+| `app` `MotionWiring.kt` (new), `Cheats.kt` | — | `measuringWith`; the sensor behind the grant, started by the panel |
+| `phone-session-2026-11-19.md` | — | *The motion budget* (D-321) |
+
 ### D-322 · **The work order is the design's: the mix scaled to `K`, one cross-player dependency per seat with the 20–120 s unlock and `you're up`, the Array Wipe circuit with its disk in hand, and Memory Dump's house half — built (recording 49); Memory Dump's screens, the upstream notice's look and three of M5's chain rules are STOPPED for the owner**
 
 **The rulings** (owner, 2026-11-21). *"We should build this"*, of four things the rules audit listed

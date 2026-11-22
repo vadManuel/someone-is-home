@@ -26,6 +26,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -717,9 +720,10 @@ fun FilesScreen(vals: PanelVals) {
 fun TermLiveScreen(vals: PanelVals) {
     val actions = LocalActions.current
     TerminalView("TERMINAL . LIVE", ScreenId.Home, vals.terminalMap, vals) {
-        // **Reading is an uncompletable task, so the motion budget applies** (`gdd.md:476`, D-199).
-        // Standing still, glowing, at a place everybody knows: move too much and the view closes,
-        // and *the exposure is the limit* rather than a timer.
+        // **Reading is an uncompletable Subroutine, so the motion budget applies** (`gdd.md:492`,
+        // D-199). Standing still, glowing, at a place everybody knows: move too much and the view
+        // closes and the station is free (D-203, D-321), and *the exposure is the limit* rather
+        // than a timer.
         KitBudgetRow()
         // **The station's one gated resource** (D-319). Ready, it asks the house for the playback;
         // cooling down or with no history yet, it is dimmed in the dim ink, takes no press, and says
@@ -843,21 +847,39 @@ internal fun FloorStrip(p: Palette, storeys: List<String>, shown: Int, onPick: (
 }
 
 /**
- * The motion budget as the mockup draws it: a reading between two hairlines, not a bar. On every
- * Subroutine screen (44 tall there) and on the Terminal's live view and timelapse, because reading
- * the map is an uncompletable task (`gdd.md:476`, D-199).
+ * The motion budget as the mockup draws it: MOTION BUDGET and HOLDING between two hairlines. On
+ * every Subroutine screen (44 tall there) and on the Terminal's live view and timelapse, because
+ * reading the map is an uncompletable Subroutine (`gdd.md:492`, D-199).
  *
  * It calibrates on entry against that player's own hand steadiness, and it is the **one** thing in
- * the game a client adjudicates (D-043). None of that exists yet: there is no motion on a desktop
- * render, so this states the condition and does not draw a draining bar. **A bar that moved here
- * would be moving on nothing**, which on the one client-adjudicated value in the game is the worst
- * place to put a decorative animation.
+ * the game a client adjudicates (D-043, [MotionBudget]).
+ *
+ * **The lower hairline is M2's thin draining bar** (D-321): the part still left is drawn in the
+ * row's own word ink ([Palette.dim]) and the spent part in the hairline's ([Palette.faint]), so the
+ * bar adds no light level, colour or type the row did not already have, and on a screen whose
+ * palette is black (Sniff before its answer) it is black too. *Failure must never be a surprise*
+ * (M2): the bar is the warning. It is read off [LocalMotionBar] in the draw lambda alone, so a
+ * sample invalidates the draw and nothing else (rule 7). **Provisional:** its look is this build's, not the
+ * owner's (D-321): the ruling names a thin draining bar, always visible, and nothing about where or
+ * in which ink. **The words never change**: HOLDING is the row's only ruled word, so a phone
+ * calibrating, a phone draining and a phone at rest all say it; the bar is what moves.
+ *
+ * Off a housed phone nothing samples, so every render draws it full.
  */
 @Composable
 internal fun KitBudgetRow(p: Palette = Palette.DARK, height: Dp = 40.dp) {
+    val bar = LocalMotionBar.current
     Row(
         Modifier.fillMaxWidth().heightIn(min = height)
-            .edgeLine(PanelSide.Top, p.faint, 1.dp).edgeLine(PanelSide.Bottom, p.faint, 1.dp),
+            .edgeLine(PanelSide.Top, p.faint, 1.dp)
+            .drawBehind {
+                val t = 1.dp.toPx()
+                val y = size.height - t
+                val lit = size.width * bar.left.floatValue
+                drawRect(p.faint, Offset(lit, y), Size(size.width - lit, t))
+                drawRect(p.dim, Offset(0f, y), Size(lit, t))
+            }
+            .testTag(MOTION_BUDGET_ROW),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Words("MOTION BUDGET", Modifier.weight(1f), size = 22, color = p.dim, lineHeight = 1.0)

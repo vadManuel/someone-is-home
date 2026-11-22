@@ -221,6 +221,25 @@ Tick each line as you see it.
 - [ ] **Nothing tells you someone is waiting on you yet** (the house sends it; how it looks is not
       ruled).
 
+**The motion budget** *(D-321; every number is provisional, so these lines are where they are first felt)*
+- [ ] **Still is free**: open a Subroutine and hold the phone as you naturally would for its whole
+      length, tapping as it asks. The line under MOTION BUDGET / HOLDING stays lit end to end and
+      the screen stays. Try it on a short one (Replay) and a medium one (Handshake), on both phones.
+- [ ] **Turning to look behind you**: on a Subroutine, turn your body to check the room behind you
+      and back. Note how much of the line goes (M2 wants this lenient).
+- [ ] **Walking away closes it**: open a Subroutine, then walk off. The line drains as you go, and
+      within a few steps the phone is back on the work order, as if you had pressed STOP NOW, with no
+      buzz. Scan the card again to start over. Say how many steps it took, and whether the drain was
+      a warning you saw before it closed (*failure must never be a surprise*).
+- [ ] **The station**: read the Terminal and walk off. The live view closes to the springboard, and
+      a second phone scanning the T card straight after is let in (the station is free). Same from
+      the timelapse while it plays.
+- [ ] **Both roles feel the same**: the Insider's phone drains and closes exactly as a Resident's.
+- [ ] **MOTION & FITNESS off**: switch it off in Settings, come back, open a Subroutine and walk
+      off. Nothing drains and nothing closes (and the permission warning is the house's, as before).
+- [ ] **The line itself**: say whether the lit lower hairline reads as the budget, and whether it
+      should be somewhere else or another ink (its look is provisional).
+
 **Release build**
 - [ ] `./run-app.sh device release` on a UWB phone launches to the boot screen. It must not stop
       at launch, now that it asks iOS about UWB (D-292) and carries the Nearby Interaction line

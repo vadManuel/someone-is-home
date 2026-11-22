@@ -104,6 +104,12 @@ fun Screen(
      */
     report: ReportCircle = remember { ReportCircle() },
     /**
+     * **How much of the motion budget is left** (M2, D-321): [report]'s arrangement, one float read
+     * in the budget row's draw lambda. In the app [FlowHost] passes the model's; every render that
+     * does not gets a full one.
+     */
+    motion: MotionBar = remember { MotionBar() },
+    /**
      * **True while a Surge owns the phone, and then nothing a finger does reaches anything** (D-182:
      * *player input: none, fully automatic, start to finish*). The lamp's slam draws over the panel
      * and holds no finger, so without this a tap in the bright or the dark phase landed on the
@@ -126,6 +132,7 @@ fun Screen(
         LocalSubroutine provides subroutines,
         LocalNotifications provides notifications,
         LocalPerms provides perms,
+        LocalMotionBar provides motion,
         // A hold already under way lets go at the slam (D-323 E); see [rememberHold].
         LocalInputBlocked provides inputBlocked,
     ) {
