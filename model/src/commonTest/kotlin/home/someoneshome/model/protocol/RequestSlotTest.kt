@@ -27,6 +27,7 @@ class RequestSlotTest {
         Asked.Act(IntentMessage.FireIsolate(marker)),
         Asked.Act(IntentMessage.FireStatic),
         Asked.Act(IntentMessage.StopSubroutine),
+        Asked.Act(IntentMessage.BeginCarry),
         Asked.Act(IntentMessage.LeaveTerminal),
         Asked.Act(IntentMessage.ReturnSyncPulse(List(8) { 9_999_999_999L - it })),
         Asked.Act(IntentMessage.CheckIn),

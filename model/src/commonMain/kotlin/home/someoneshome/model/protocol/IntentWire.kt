@@ -178,6 +178,16 @@ sealed class IntentMessage {
     data object StopSubroutine : IntentMessage()
 
     /**
+     * **BEGIN, where the scan offered something to carry** (D-325, [Intent.BeginCarry]): a Memory
+     * Dump's source or an Array Wipe's first Spares. Empty for [StopSubroutine]'s reason: the house
+     * knows what its own answer offered this seat.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("BeginCarry")
+    data object BeginCarry : IntentMessage()
+
+    /**
      * **The live view or the timelapse closed, for whatever reason** (D-199, D-203,
      * [Intent.LeaveTerminal]). Empty for [StopSubroutine]'s reason: the event it becomes carries the
      * actor and nothing else, and the lock needs nothing more.
@@ -304,6 +314,7 @@ sealed class IntentMessage {
         is FireIsolate -> Intent.FireIsolate(actor, target)
         is FireStatic -> Intent.FireStatic(actor)
         is StopSubroutine -> Intent.StopSubroutine(actor)
+        is BeginCarry -> Intent.BeginCarry(actor)
         is LeaveTerminal -> Intent.LeaveTerminal(actor)
         is PlayTimelapse -> Intent.PlayTimelapse(actor)
         is StopTimelapse -> Intent.StopTimelapse(actor)

@@ -51,6 +51,7 @@ class IntentWireTest {
         // the day it is added.
         IntentMessage.FireStatic,
         IntentMessage.StopSubroutine,
+        IntentMessage.BeginCarry,
         IntentMessage.LeaveTerminal,
         IntentMessage.PlayTimelapse,
         IntentMessage.StopTimelapse,
@@ -77,6 +78,7 @@ class IntentWireTest {
         is Intent.FireIsolate -> IntentMessage.FireIsolate(intent.target)
         is Intent.FireStatic -> IntentMessage.FireStatic
         is Intent.StopSubroutine -> IntentMessage.StopSubroutine
+        is Intent.BeginCarry -> IntentMessage.BeginCarry
         is Intent.LeaveTerminal -> IntentMessage.LeaveTerminal
         is Intent.PlayTimelapse -> IntentMessage.PlayTimelapse
         is Intent.StopTimelapse -> IntentMessage.StopTimelapse
@@ -295,6 +297,7 @@ class IntentWireTest {
         is Intent.FireIsolate -> intent.actor
         is Intent.FireStatic -> intent.actor
         is Intent.StopSubroutine -> intent.actor
+        is Intent.BeginCarry -> intent.actor
         is Intent.LeaveTerminal -> intent.actor
         is Intent.PlayTimelapse -> intent.actor
         is Intent.StopTimelapse -> intent.actor

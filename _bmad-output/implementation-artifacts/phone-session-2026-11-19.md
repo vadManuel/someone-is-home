@@ -198,11 +198,12 @@ Tick each line as you see it.
 
 **The work order and carrying** *(D-322)*
 - [ ] **The mix**: open SUBROUTINES at LIGHTS OUT. Every phone's list is the same length and holds
-      one ARRAY WIPE and short and medium Subroutines, plus one or more LOCKED · WAITING UPSTREAM
-      lines, and **no MEMORY DUMP**: it is not dealt until its screens are designed (D-323). An
-      Insider's list looks the same.
-- [ ] **Array Wipe**: scan the ARRAY WIPE's first card (Spares). The phone goes to page 1 and the
-      widget says CARRYING · DISK 01 · TO RACK · NOTHING ELSE OPENS UNTIL IT IS DELIVERED, with the
+      one ARRAY WIPE, one MEMORY DUMP (D-325) and short and medium Subroutines, plus one LOCKED ·
+      WAITING UPSTREAM line. An Insider's list looks the same.
+- [ ] **Array Wipe**: scan the ARRAY WIPE's first card (Spares). The caught scan says CARRY ONE
+      DISK AT A TIME. / NOTHING ELSE OPENS UNTIL IT IS DELIVERED. (D-325). Press NOT THIS ONE once
+      and scan the Rack: nothing happens. Scan Spares again and press BEGIN: the phone goes to page 1
+      and the widget says CARRYING · DISK 01 · TO RACK · NOTHING ELSE OPENS UNTIL IT IS DELIVERED, with the
       padlock on the strip; FILES shows DISK 01, IN HAND, DESTINATION · RACK. Scan any other card of
       yours: NOTHING FOR YOU HERE, and the disk stays. Scan the Rack: TO DISPOSAL. Scan Disposal: the
       widget goes back to the list. Do it twice and the line is struck off. Say whether landing on
@@ -220,8 +221,16 @@ Tick each line as you see it.
       ever feels different.
 - [ ] **A Revoke strands a line**: if a Revoked player held your LOCKED line, it never opens. Note
       whether that is what happens and how it feels at the next meeting (D-146).
-- [ ] **No Memory Dump anywhere**: no phone's list holds one (D-323), so every line is one the
-      phone can finish. Say whether the meter reaches 0 when everyone finishes.
+- [ ] **Memory Dump** *(D-325)*: scan its first card. The caught scan says DOTS WILL FLASH IN
+      ORDER. / CARRY THE ORDER IN YOUR HEAD. BEGIN: four dots in a 2×2 grid flash in order, twice
+      (about 9 s), then the screen shows the target's shape and TO <ROOM>. The SUBROUTINES row now
+      reads TO <ROOM>. Walk there and scan: THE DOTS WILL NOT FLASH. / TAP THEM BACK FROM MEMORY.
+      Tap the four back: RETURNED . WAITING, then THE HOUSE GROWS WEAKER (short buzz) and the row is
+      struck off. Do it once wrong on purpose: REJECTED . BACK TO <SOURCE ROOM> (double buzz), and
+      the target opens nothing until you rescan the source, which shows a new pattern. NOT THIS ONE
+      at the source holds nothing. FILES never shows the pattern. Say whether 9 s is enough and
+      whether the screen is too bright for MEDIUM. Then say whether the meter reaches 0 when
+      everyone finishes.
 - [ ] **Nothing tells you someone is waiting on you** (D-324: no chain notice at lights out; the
       LOCKED · WAITING UPSTREAM row is the notice).
 

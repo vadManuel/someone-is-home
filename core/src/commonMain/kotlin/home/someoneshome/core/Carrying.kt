@@ -115,14 +115,11 @@ internal fun stepAt(state: GameState, seat: Seat, marker: MarkerId): ScanStep {
 /**
  * **A Memory Dump's pattern, drawn fresh at every scan of the source** (`gdd.md:642`, D-139's
  * re-draw). Off the scan's own minted id, as every instance is, so a re-scan cannot show what the
- * last one did and a replay shows exactly what it showed. ⚠️ The element is a placeholder — see
- * [MemoryPattern].
+ * last one did and a replay shows exactly what it showed. An element is one of Replay's four dots,
+ * each place once, four long (D-325) — see [MemoryPattern].
  */
-internal fun patternFor(seed: Long, id: EntityId): List<Int> {
-    val draw = Draw(seed, SeedPurpose.Instance, id.value)
-    val length = MemoryPattern.LEAST + draw.next(MemoryPattern.MOST - MemoryPattern.LEAST + 1)
-    return List(length) { it }.shuffledBy(draw)
-}
+internal fun patternFor(seed: Long, id: EntityId): List<Int> =
+    List(MemoryPattern.LENGTH) { it }.shuffledBy(Draw(seed, SeedPurpose.Instance, id.value))
 
 /**
  * **The target's open entry: the house's copy of the pattern is the answer** (`gdd.md:648`). The

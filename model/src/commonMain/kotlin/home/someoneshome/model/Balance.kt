@@ -570,8 +570,8 @@ object Balance {
     )
 
     /**
-     * **Whether the mix deals a Memory Dump: not until its screens are designed** (the owner's
-     * 2026-11-22 ruling, D-323 A). ⚠️ **Provisional, owner-pending.**
+     * **Whether the mix deals a Memory Dump: yes, since its screens were built from the approved
+     * draft** (D-325; it was off from D-323 A until then).
      *
      * D-322 built Memory Dump's house half and STOPPED its two screens, so no phone can open one.
      * Dealt into every order as D-322 had it, every seat held a line nobody could finish and the
@@ -582,7 +582,7 @@ object Balance {
      * and [orderMix] is [designMix] again. It is not a lobby setting and not a balance value a round
      * locks: it says what the build can play, and no role reads it.
      */
-    val MEMORY_DUMP_DEALT: Boolean = false
+    val MEMORY_DUMP_DEALT: Boolean = true
 
     /**
      * **How many entries of each structure an order of [size] holds**: [designMix], with the long's

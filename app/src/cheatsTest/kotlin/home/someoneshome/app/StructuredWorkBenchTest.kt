@@ -31,8 +31,8 @@ import kotlin.test.assertTrue
 
 /**
  * **A bench round where somebody finishes each new piece of work** (D-322): an Array Wipe walked on
- * a phone's real model through the house's own card-read path (`RoundAuthority.cardRead`, D-318), no
- * Memory Dump dealt while its screens are unbuilt (D-323 A), and a cross-player dependency released
+ * a phone's real model through the house's own card-read path (`RoundAuthority.cardRead`, D-318), the
+ * design's mix dealt again with a Memory Dump in every order (D-325), and a cross-player dependency released
  * by the house's own clock onto the downstream phone as `you're up`.
  *
  * Real: the rules, the draw, the gate, `EmitSchema`'s allowlist, `RoundWire.project`, `FlowModel`.
@@ -58,7 +58,11 @@ class StructuredWorkBenchTest {
 
     private class Bench(inputs: ArmingInputs) {
         val phones: Map<Seat, FlowModel> = inputs.seats.associateWith { seat ->
-            FlowModel(PanelState(screen = ScreenId.Boot), subroutines = SubroutineModel(send = { up(seat, it) }))
+            FlowModel(
+                PanelState(screen = ScreenId.Boot),
+                subroutines = SubroutineModel(send = { up(seat, it) }),
+                send = { up(seat, it) },
+            )
         }
         private val pending = mutableListOf<Intent>()
 
@@ -83,6 +87,7 @@ class StructuredWorkBenchTest {
             pending += when (intent) {
                 is IntentMessage.HandOverEntry -> Intent.HandOverEntry(seat, intent.marker, intent.entered)
                 IntentMessage.StopSubroutine -> Intent.StopSubroutine(seat)
+                IntentMessage.BeginCarry -> Intent.BeginCarry(seat)
                 else -> return
             }
         }
@@ -92,6 +97,18 @@ class StructuredWorkBenchTest {
             phones.getValue(seat).scanning(card)
             house.cardRead(seat, card)
             while (pending.isNotEmpty()) house.heard(pending.removeAt(0))
+        }
+
+        /** BEGIN on the phone's caught scan, and whatever it sent up heard by the house (D-325). */
+        suspend fun begin(seat: Seat) {
+            phones.getValue(seat).beginSubroutine()
+            while (pending.isNotEmpty()) house.heard(pending.removeAt(0))
+        }
+
+        /** A station read as a player walks it: the first Spares is briefed, so BEGIN follows it (D-325). */
+        suspend fun station(seat: Seat, card: MarkerId) {
+            read(seat, card)
+            if (phones.getValue(seat).state.circuit != null) begin(seat)
         }
 
         /** Finish a Subroutine line the way [HandOverLoopTest] does, by intents at its card. */
@@ -112,7 +129,7 @@ class StructuredWorkBenchTest {
                 when (line.work) {
                     is AssignedWork.Subroutine -> play(seat, b)
                     AssignedWork.MemoryDump -> dump(seat, b)
-                    AssignedWork.ArrayWipe -> repeat(Balance.ARRAY_WIPE_DISKS) { for (m in line.markers) read(seat, m) }
+                    AssignedWork.ArrayWipe -> repeat(Balance.ARRAY_WIPE_DISKS) { for (m in line.markers) station(seat, m) }
                 }
             }
         }
@@ -120,6 +137,7 @@ class StructuredWorkBenchTest {
         suspend fun dump(seat: Seat, index: Int) {
             val (source, target) = house.state.workOrderFor(seat)!!.entries[index].markers
             read(seat, source)
+            begin(seat)
             val pattern = house.state.patternOf(seat, index)!!.elements
             read(seat, target)
             house.heard(Intent.HandOverEntry(seat, target, pattern))
@@ -144,7 +162,11 @@ class StructuredWorkBenchTest {
         val (spares, rack, disposal) = wipe.markers
 
         bench.read(seat, spares)
-        assertEquals(Carried("DISK 01", "RACK"), phone.state.carrying, "Spares did not put DISK 01 in this phone's hand")
+        // The first Spares is briefed (D-325): the caught scan, nothing in hand until BEGIN.
+        assertEquals(ScreenId.ScanCaught, phone.state.screen, "the first Spares was not briefed")
+        assertNull(phone.state.carrying, "the first Spares put a disk in hand before BEGIN")
+        bench.begin(seat)
+        assertEquals(Carried("DISK 01", "RACK"), phone.state.carrying, "BEGIN at Spares did not put DISK 01 in this phone's hand")
         assertEquals(ScreenId.Home, phone.state.screen, "a station step landed somewhere other than the widget")
 
         // While carrying: a Subroutine of this order, actionable, is NOTHING FOR YOU HERE.
@@ -170,23 +192,25 @@ class StructuredWorkBenchTest {
     }
 
     /**
-     * **No phone on the bench is dealt a Memory Dump while its screens are unbuilt** (the owner's
-     * 2026-11-22 ruling, D-323 A). No phone can open one, so the mix deals the long's share as
-     * medium; the house half is tested on a planted line in `core` (`MemoryDumpTest`). Every seat's
-     * order, the Insider's included, and every phone's copy of it name none.
+     * **Every order on the bench holds the design's Memory Dump, and every phone names it** (D-325;
+     * D-323 A kept it off until its screens were built). The Insider's included.
      */
     @Test
-    fun noOrderOnTheBenchHoldsAMemoryDumpWhileItsScreensAreUnbuilt() = bench { bench ->
+    fun everyOrderOnTheBenchHoldsAMemoryDump() = bench { bench ->
         assertTrue(bench.house.arm(RoundCheat.SEED))
-        assertEquals(false, Balance.MEMORY_DUMP_DEALT, "Memory Dump is dealt: its screens must exist first (D-323)")
+        assertEquals(true, Balance.MEMORY_DUMP_DEALT, "Memory Dump is not dealt, though its screens are built (D-325)")
         val state = bench.house.state
         for (seat in seats) {
             val order = assertNotNull(state.workOrderFor(seat), "seat ${seat.index} was dealt no order")
-            assertTrue(order.entries.none { it.work == AssignedWork.MemoryDump }, "seat ${seat.index} was dealt a Memory Dump")
+            val longs = Balance.designMix(order.entries.size).getValue(home.someoneshome.model.SubroutineStructure.Long)
+            assertEquals(longs, order.entries.count { it.work == AssignedWork.MemoryDump }, "seat ${seat.index} holds the wrong number of Memory Dumps")
             val lines = assertNotNull(bench.phones.getValue(seat).state.order, "seat ${seat.index}'s phone holds no order")
-            assertTrue(
-                lines.filterIsInstance<OrderLine.Known>().none { it.work == AssignedWork.MemoryDump },
-                "seat ${seat.index}'s phone names a Memory Dump",
+            assertEquals(
+                order.entries.filter { it.work == AssignedWork.MemoryDump }.map { it.index },
+                (lines.filterIsInstance<OrderLine.Known>().filter { it.work == AssignedWork.MemoryDump }.map { it.index } +
+                    lines.filterIsInstance<OrderLine.Blocked>().map { it.index }.filter { i -> order.entries[i].work == AssignedWork.MemoryDump }
+                    ).sorted(),
+                "seat ${seat.index}'s phone does not hold its Memory Dump line",
             )
         }
     }

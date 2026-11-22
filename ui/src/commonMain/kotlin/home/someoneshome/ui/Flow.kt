@@ -1,5 +1,8 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.AssignedWork
+import home.someoneshome.model.SubroutineKind
+import home.someoneshome.model.MemoryPattern
 import home.someoneshome.model.ArmedTouch
 import home.someoneshome.model.CircuitStation
 import home.someoneshome.model.DiskInHand
@@ -209,6 +212,9 @@ object ScreenGraph {
         // and D-140's buzz asks a question rather than ending one. The only way out of either is
         // the player pressing STOP NOW or the house answering what they sent.
         ScreenId.SubInterrupt, ScreenId.SubDrift -> emptySet()
+        // **MEMORY DUMP's playback walks on to its carry line inside the one screen** (D-325), so
+        // it too has no edge of its own: STOP NOW, below with the rest.
+        ScreenId.SubMemory -> emptySet()
         ScreenId.Files -> setOf(ScreenId.Home)
         // **The live view is opened by the house and left by the player** (D-199). See
         // [Flow.houseOpened]: nothing walks to it except its own timelapse coming back.
@@ -1003,6 +1009,7 @@ object Flow {
         ScreenId.SubDeallocate to setOf(ScreenId.Work),
         ScreenId.SubInterrupt to setOf(ScreenId.Work),
         ScreenId.SubDrift to setOf(ScreenId.Work),
+        ScreenId.SubMemory to setOf(ScreenId.Work),
         // A house notice, swiped up off the meeting.
         ScreenId.Notice to setOf(ScreenId.Discussion),
         // Every notification, swiped away — up on the three banners, left under the clock. The
@@ -3003,6 +3010,15 @@ class FlowModel(
          */
         parameters: List<Int>? = state.current?.takeIf { it.subroutine == subroutine }?.parameters,
     ) {
+        // **An Array Wipe's first Spares: BEGIN takes the disk** (the owner's 2026-11-22 ruling,
+        // D-325). The house answers with the disk in hand, and that answer moves the phone to the
+        // widget as every station step does (D-322); nothing moves here.
+        val circuit = state.circuit
+        if (circuit != null && state.current == null) {
+            state = state.copy(circuit = null)
+            send(IntentMessage.BeginCarry)
+            return
+        }
         val screen = subroutine?.screen ?: return
         if (parameters == null && state.houseAttached) return
         if (parameters != null) {
@@ -3017,6 +3033,11 @@ class FlowModel(
         subroutines.beganAgain()
         subroutines.opened(marker)
         go(screen)
+        // **A Memory Dump's source: BEGIN starts the playback, and the house holds the pattern from
+        // here** (D-325, provisional). NOT THIS ONE sends nothing and holds nothing.
+        if (subroutine == Subroutine.MemoryDump && parameters?.firstOrNull() == MemoryPattern.SOURCE) {
+            send(IntentMessage.BeginCarry)
+        }
     }
 
     /**
@@ -3353,10 +3374,16 @@ class FlowModel(
                 val node = state.scannedAt?.takeIf { it in state.egressCards && state.egressRunning && !state.egressHeld }
                 val carried = message.carrying?.let { Flow.carriedOf(it) }
                 val stepped = Flow.stationStepped(before = state.carrying, after = carried)
-                state = state.copy(pulseAt = node, pulseTaps = emptyList(), carrying = carried)
+                state = state.copy(pulseAt = node, pulseTaps = emptyList(), carrying = carried, circuit = null)
                 val opened = message.opened
                 when {
                     node != null -> push(ScreenId.EgressWidget)
+                    // **The first Spares of an Array Wipe: the caught scan, briefed** (D-325). The
+                    // house says which answer this is; BEGIN asks it for the disk.
+                    message.circuit == 1 -> circuitCaught()?.let { caught ->
+                        state = state.copy(current = null, circuit = caught)
+                        push(ScreenId.ScanCaught)
+                    }
                     opened == null && stepped -> push(Flow.afterAStationStep())
                     opened == null -> push(ScreenId.ScanBad)
                     else -> currentFrom(opened)?.let { current ->
@@ -3947,7 +3974,10 @@ class FlowModel(
         // The FIRST destination, for `PanelVals.order`'s reason: the Array Wipe circuit names three
         // stations in draw order (D-122) and a screen read by lamplight has room for the one you
         // are walking to. An empty list is lawful and leaves the room unnamed rather than invented.
-        val at = line.at.firstOrNull()
+        // A Memory Dump's target is caught at its SECOND card (D-325), so the caught scan names that
+        // room and glyph; its source and every other line at the first.
+        val target = opened.subroutine == SubroutineKind.MemoryDump && opened.parameters.firstOrNull() == MemoryPattern.TARGET
+        val at = if (target) line.at.getOrNull(1) else line.at.firstOrNull()
         // **The question is read here, at the arrival, and a refusal opens nothing** (D-238; the
         // boundary `MalformedSubroutineParameters` names). The house cannot deal a question this
         // client cannot draw — `SubroutineDrawTest` reads thousands of its draws through these
@@ -3971,6 +4001,28 @@ class FlowModel(
             total = lines.size,
             done = lines.count { it is OrderLine.Known && it.done },
             parameters = opened.parameters,
+            sourceRoom = line.at.firstOrNull()?.room.takeIf { opened.subroutine == SubroutineKind.MemoryDump },
+            targetRoom = line.at.getOrNull(1)?.room.takeIf { opened.subroutine == SubroutineKind.MemoryDump },
+            targetMarker = line.at.getOrNull(1)?.shape?.let { MarkerShapes[it] }
+                .takeIf { opened.subroutine == SubroutineKind.MemoryDump },
+        )
+    }
+
+    /**
+     * **The Array Wipe line the house's briefed answer is about** (D-325), joined to the order it
+     * already sent, as [currentFrom] joins a Subroutine's. One circuit per order; an answer with no
+     * undone circuit on the order moves nothing, which is fail-closed.
+     */
+    private fun circuitCaught(): CaughtCircuit? {
+        val lines = state.order ?: return null
+        val line = lines.filterIsInstance<OrderLine.Known>()
+            .firstOrNull { it.work == AssignedWork.ArrayWipe && !it.done } ?: return null
+        val at = line.at.firstOrNull()
+        return CaughtCircuit(
+            room = at?.room,
+            marker = at?.shape?.let { MarkerShapes[it] },
+            index = line.index + 1,
+            total = lines.size,
         )
     }
 

@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.MemoryPattern
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Destination
 import home.someoneshome.model.HomePlanView
@@ -91,6 +92,9 @@ enum class ScreenId {
     Work, Scan, ScanCaught, ScanBad, ScanUnknown, TermBusy,
     SubHandshake, SubReplay, SubParity, SubShort, SubTrace, SubJam, SubSniff, SubDeallocate,
     SubInterrupt, SubDrift,
+    // **Memory Dump: the source's playback and carry line, and the target's entry** (D-325). One
+    // screen, its stage the house's dealt question, as Replay's dots are.
+    SubMemory,
     // **No `TermNo`.** NO SIGNAL is deleted with the tile that reached it (D-199): the live view
     // opens because the house answered a scan of the T card, and from nowhere else. **No `Notes`**
     // either: the owner removed the app (D-315).
@@ -166,6 +170,12 @@ data class StaticJam(val seconds: Int, val seed: Long)
  * prints, and neither is decided here -- see [PanelState.carrying].
  */
 data class Carried(val item: String, val to: String)
+
+/**
+ * **The Array Wipe as the caught scan draws it** (D-325): where Spares is, and which line of the
+ * order the circuit is. Off the order the house sent; the light and the briefing are the circuit's.
+ */
+data class CaughtCircuit(val room: String?, val marker: MarkerShape?, val index: Int, val total: Int)
 
 data class PanelState(
     val screen: ScreenId = ScreenId.Home,
@@ -399,6 +409,11 @@ data class PanelState(
      * sentences a player reads before the work opens.
      */
     val current: CurrentSubroutine? = null,
+    /**
+     * **An Array Wipe's first Spares, caught and briefed** (the owner's 2026-11-22 ruling, D-325),
+     * or null. Set by the house's answer, which says so; BEGIN asks the house for the disk.
+     */
+    val circuit: CaughtCircuit? = null,
     /**
      * **Which card this phone last read — the id, beside the row the read produced.**
      *
@@ -1733,6 +1748,9 @@ class PanelVals(
      */
     val current: CurrentSubroutine? get() = housed(state.current, CURRENT, nothing = null)
 
+    /** **An Array Wipe's first Spares, caught and briefed** (D-325), or null. The house's alone. */
+    val circuit: CaughtCircuit? get() = state.circuit
+
     // ---- The work order --------------------------------------------------------------------
 
     /**
@@ -1789,13 +1807,20 @@ class PanelVals(
                     AssignedWork.ArrayWipe -> OrderRow.Named(
                         line.index, ARRAY_WIPE, ARRAY_WIPE_LIGHT, line.done, room, glyph,
                     )
-                    // **The long, by name and with no light mark** (D-322). D-113: *Memory Dump is
-                    // rated when it is built*, and its rating is STOPPED for the owner with its two
-                    // screens, so the row claims no signature rather than inventing one. An absent
-                    // mark is never misread as DARK: nothing on the ladder is zero cells.
-                    AssignedWork.MemoryDump -> OrderRow.Named(
-                        line.index, MEMORY_DUMP, MEMORY_DUMP_LIGHT, line.done, room, glyph,
-                    )
+                    // **The long, rated MEDIUM** (D-325). Its room and glyph are the source's until
+                    // the house holds the pattern, then TO <ROOM> and the target's glyph: the
+                    // house's digit, never the phone's guess (the pattern is in no client type).
+                    AssignedWork.MemoryDump -> {
+                        val target = line.at.getOrNull(1)
+                        if (line.pattern == 1 && target != null) {
+                            OrderRow.Named(
+                                line.index, MEMORY_DUMP, MEMORY_DUMP_LIGHT, line.done,
+                                memoryDumpTo(target.room), MarkerShapes[target.shape],
+                            )
+                        } else {
+                            OrderRow.Named(line.index, MEMORY_DUMP, MEMORY_DUMP_LIGHT, line.done, room, glyph)
+                        }
+                    }
                 }
             }
             is OrderLine.Blocked -> OrderRow.Blocked(line.index)
@@ -2322,12 +2347,11 @@ class PanelVals(
         val ARRAY_WIPE_LIGHT: LightSignature = LightSignature.Bright
 
         /**
-         * **What the long is called, and its light: unrated** (D-322). The name is the design's
-         * (`gdd.md:640`); the light is STOPPED with its screens (D-113), so it is null and the row
-         * draws no mark.
+         * **What the long is called, and its light: MEDIUM** (D-325, D-113: rated when built). Off
+         * the roster row, so the order and the screen cannot disagree.
          */
-        const val MEMORY_DUMP = "MEMORY DUMP"
-        val MEMORY_DUMP_LIGHT: LightSignature? = null
+        val MEMORY_DUMP: String get() = Subroutine.MemoryDump.label
+        val MEMORY_DUMP_LIGHT: LightSignature? get() = Subroutine.MemoryDump.light
 
         val CURRENT: CurrentSubroutine = CurrentSubroutine(
             subroutine = Subroutine.Handshake,
@@ -2791,7 +2815,26 @@ data class CurrentSubroutine(
      * nothing over it (`FlowModel.beginSubroutine`).
      */
     val parameters: List<Int>? = null,
+    /**
+     * **A Memory Dump's two rooms and the target's glyph** (D-325), off the order line's own two
+     * destinations: the carry screen's TO <ROOM> and glyph, and the mismatch's BACK TO <ROOM>.
+     * Null on every other Subroutine.
+     */
+    val sourceRoom: String? = null,
+    val targetRoom: String? = null,
+    val targetMarker: MarkerShape? = null,
 ) {
+    /**
+     * **What the caught scan says** (D-188): the roster's line, except at a Memory Dump's target,
+     * whose line is [MEMORY_DUMP_TARGET_BRIEFING] (D-325). Read off the stage the house dealt.
+     */
+    val briefing: String
+        get() = if (subroutine == Subroutine.MemoryDump && parameters?.firstOrNull() == MemoryPattern.TARGET) {
+            MEMORY_DUMP_TARGET_BRIEFING
+        } else {
+            subroutine.briefing
+        }
+
     /**
      * The name and the light, taken off the roster rather than stored beside it.
      *

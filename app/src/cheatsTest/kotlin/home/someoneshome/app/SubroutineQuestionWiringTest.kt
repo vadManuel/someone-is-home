@@ -10,6 +10,7 @@ import home.someoneshome.model.HapticStep
 import home.someoneshome.model.InterruptSweep
 import home.someoneshome.model.JamRings
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MemoryPattern
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.ParityGrid
 import home.someoneshome.model.ReplayPattern
@@ -227,8 +228,8 @@ class SubroutineQuestionWiringTest {
         SubroutineKind.SignalTrace -> m.wiring.let { listOf(it.nodes, it.edges, it.source, it.sink) }
         SubroutineKind.Jam -> m.rings.opening
         SubroutineKind.Handshake -> m.handshake.length
-        // No screen draws a Memory Dump: its two screens are STOPPED for the owner (D-322).
-        SubroutineKind.MemoryDump -> Unit
+        // The stage, the pattern at the source, and the length (D-325).
+        SubroutineKind.MemoryDump -> m.dump.let { listOf(it.shown, it.elements, it.length, m.memory.length) }
     }
 
     /** The same projection off the reader, for the parameters that came down the socket. */
@@ -243,7 +244,7 @@ class SubroutineQuestionWiringTest {
         SubroutineKind.SignalTrace -> SignalGraph.of(p).let { listOf(it.nodes, it.edges, it.source, it.sink) }
         SubroutineKind.Jam -> JamRings.of(p).opening
         SubroutineKind.Handshake -> HandshakeRhythm.of(p).beats
-        SubroutineKind.MemoryDump -> Unit
+        SubroutineKind.MemoryDump -> MemoryPattern.of(p).let { listOf(it.shown, it.elements, it.length, it.length) }
     }
 
     /** The shortest route over the lattice the phone draws — the player's work, done by a test. */
@@ -331,6 +332,8 @@ class SubroutineQuestionWiringTest {
                 val outside = if (sweep.bandTo + 3 <= InterruptSweep.SPAN) sweep.bandTo + 3 else sweep.bandFrom - 3
                 a.tapSubroutine(s, if (right) sweep.bandAt else outside)
             }
+            // Walked across two cards by its own test, never in one attempt (D-325).
+            Subroutine.MemoryDump -> return false
             Subroutine.Drift -> {
                 val path = m.path
                 // The motor's *now* is the screen's *now*: one wait, off one instance.
@@ -459,7 +462,8 @@ class SubroutineQuestionWiringTest {
         for (role in listOf(Role.Resident, Role.Insider)) {
             for (right in listOf(true, false)) {
                 val reached = attempts.filter { it.role == role && it.right == right }.map { it.kind }.toSet()
-                // Every kind a phone can open: Memory Dump's screens are STOPPED for the owner (D-322).
+                // Every kind graded in one attempt at one card: Memory Dump spans two and is walked
+                // end to end by its own guard below (D-325).
                 val owed = SubroutineKind.entries.toSet() - SubroutineKind.MemoryDump
                 assertEquals(
                     owed, reached,
@@ -467,6 +471,103 @@ class SubroutineQuestionWiringTest {
                 )
             }
         }
+    }
+
+    // ---- Memory Dump, end to end over the sockets (D-325) ---------------------------------------
+
+    /** Read [marker] the way the scan bridge does, and wait for the house's answer on the socket. */
+    private suspend fun Room.read(phone: Phone, marker: MarkerId): RoundMessage.ScanAnswered {
+        val scans = phone.pushed.count { it is RoundMessage.ScanAnswered }
+        phone.round.scanning(marker)
+        phone.round.readCard(marker)
+        until("${phone.name}'s scan of ${marker.value} was answered") { phone.pushed.count { it is RoundMessage.ScanAnswered } > scans }
+        return phone.pushed.last { it is RoundMessage.ScanAnswered } as RoundMessage.ScanAnswered
+    }
+
+    /** The line of [phone]'s order the house holds for line [index], as the phone holds it. */
+    private fun Phone.line(index: Int): OrderLine.Known? =
+        flow.state.order?.getOrNull(index) as? OrderLine.Known
+
+    /**
+     * **Source, BEGIN, the playback, STOP NOW, target, BEGIN, the taps — and the verdict, on the
+     * phone's own socket.** What is tapped is what the phone's screen played ([SubroutineModel.dump]),
+     * the player's memory; [right] false taps it reversed. Returns the verdict.
+     */
+    private suspend fun Room.dump(seat: Seat, index: Int, right: Boolean): Boolean {
+        val phone = phoneAt(seat)
+        val (source, target) = house.state.workOrderFor(seat)!!.entries[index].markers
+        val shown = read(phone, source)
+        assertEquals(SubroutineKind.MemoryDump, shown.opened?.subroutine, "the source opened something else")
+        until("${phone.name} reached the source's caught scan") { phone.flow.state.screen == ScreenId.ScanCaught }
+        phone.flow.actions().beginSubroutine()
+        assertEquals(ScreenId.SubMemory, phone.flow.state.screen, "BEGIN did not start the playback")
+        val remembered = phone.flow.subroutines.dump.elements
+        assertEquals(MemoryPattern.of(shown.opened!!.parameters).elements, remembered, "the screen plays a pattern the house did not show")
+        until("the order on ${phone.name} reads TO <ROOM>") { phone.line(index)?.pattern == 1 }
+        assertEquals(remembered, house.state.patternOf(seat, index)?.elements, "the house holds a different pattern")
+        phone.flow.actions().stopSubroutine()
+
+        val asked = read(phone, target)
+        assertEquals(listOf(MemoryPattern.TARGET, MemoryPattern.LENGTH), asked.opened?.parameters, "the target asked for something else")
+        until("${phone.name} reached the target's caught scan") { phone.flow.state.screen == ScreenId.ScanCaught }
+        phone.flow.actions().beginSubroutine()
+        assertEquals(ScreenId.SubMemory, phone.flow.state.screen)
+        val graded = phone.pushed.count { it is RoundMessage.SubroutineGraded }
+        for (t in if (right) remembered else remembered.reversed()) phone.flow.actions().tapSubroutine(Subroutine.MemoryDump, t)
+        until("${phone.name}'s Memory Dump was graded") { phone.pushed.count { it is RoundMessage.SubroutineGraded } > graded }
+        val verdict = (phone.pushed.last { it is RoundMessage.SubroutineGraded } as RoundMessage.SubroutineGraded).accepted
+        until("the order on ${phone.name} stopped reading TO <ROOM>") { phone.line(index)?.pattern == 0 }
+        phone.flow.actions().stopSubroutine()
+        return verdict
+    }
+
+    /**
+     * **GUARD (D-325): a Memory Dump is played end to end over the sockets, for a Resident and for
+     * the Insider's fake.** On the phones' own screens through real `LobbyOverTransport`s: NOT THIS
+     * ONE at the source holds nothing (the target then opens nothing); a mismatch is REJECTED and
+     * sends the player back, the target opening nothing until the source shows a fresh pattern;
+     * and the right pattern is ACCEPTED and strikes the line, the meter moving for the Resident only.
+     */
+    @Test
+    fun aMemoryDumpIsPlayedEndToEndOverTheSockets() {
+        val played = mutableSetOf<Role>()
+        for (seed in SEEDS) {
+            if (played.size == 2) break
+            evening(seed) { room ->
+                val house = room.house
+                for (seat in house.state.seats) {
+                    val role = house.state.roleOf(seat)
+                    if (role in played) continue
+                    val order = house.state.workOrderFor(seat)!!
+                    val dump = order.entries.firstOrNull { it.work == AssignedWork.MemoryDump } ?: continue
+                    // A line the seat can walk now, at two cards nothing earlier of its order answers at.
+                    if (!order.isActionable(dump)) continue
+                    if (order.entries.take(dump.index).any { e -> !e.done && dump.markers.any { e.isAt(it) } }) continue
+                    val phone = room.phoneAt(seat)
+                    val (source, target) = dump.markers
+
+                    // NOT THIS ONE at the source: nothing is held, and the target opens nothing.
+                    room.read(phone, source)
+                    until("${phone.name} reached the caught scan") { phone.flow.state.screen == ScreenId.ScanCaught }
+                    phone.flow.go(ScreenId.Work)
+                    assertEquals(null, room.read(phone, target).opened, "the target opened after NOT THIS ONE")
+                    assertEquals(null, house.state.patternOf(seat, dump.index), "NOT THIS ONE held a pattern")
+
+                    // A mismatch: REJECTED, the pattern let go, and the target shut until the source.
+                    assertEquals(false, room.dump(seat, dump.index, right = false), "a reversed pattern was accepted")
+                    assertEquals(null, house.state.patternOf(seat, dump.index), "a mismatch kept the pattern")
+                    assertEquals(null, room.read(phone, target).opened, "the target opened again without the source")
+
+                    // Back to the source for a fresh pattern, and the right one this time.
+                    val integrity = house.state.systemIntegrity
+                    assertEquals(true, room.dump(seat, dump.index, right = true), "the remembered pattern was rejected")
+                    assertTrue(phone.line(dump.index)?.done == true, "the line was not struck off on the phone")
+                    assertEquals(if (role == Role.Resident) integrity - 1 else integrity, house.state.systemIntegrity, "the meter moved wrongly for a $role")
+                    played += role
+                }
+            }
+        }
+        assertEquals(setOf(Role.Resident, Role.Insider), played, "the evenings gave no walkable Memory Dump to $played")
     }
 
     private companion object {

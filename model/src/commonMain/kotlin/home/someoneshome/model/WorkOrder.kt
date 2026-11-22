@@ -225,7 +225,7 @@ class WorkOrder(val seat: Seat, val entries: List<OrderEntry>) {
      * you by where they are standing (D-146 made dependencies cross-player), so the room would
      * hand back exactly what the type was split to withhold.
      */
-    fun asLines(geography: List<Destination>): List<OrderLine> = entries.map { entry ->
+    fun asLines(geography: List<Destination>, patterns: List<Int> = emptyList()): List<OrderLine> = entries.map { entry ->
         if (isActionable(entry) || entry.done) {
             OrderLine.Known(
                 index = entry.index,
@@ -234,6 +234,9 @@ class WorkOrder(val seat: Seat, val entries: List<OrderEntry>) {
                 at = entry.markers.mapNotNull { m ->
                     geography.firstOrNull { it.marker.value == m.value }
                 },
+                // [patterns] is the house's list of the Memory Dump lines whose pattern it holds for
+                // this seat (D-325); every other line is 0, on the wire all the same.
+                pattern = if (entry.work == AssignedWork.MemoryDump && entry.index in patterns) 1 else 0,
             )
         } else {
             OrderLine.Blocked(entry.index)
@@ -285,7 +288,23 @@ sealed interface OrderLine {
          * Only this seat's own order's rooms are ever in here. See [WorkOrder.asLines].
          */
         val at: List<Destination>,
-    ) : OrderLine
+        /**
+         * **1 while the house holds this Memory Dump line's pattern, 0 otherwise** (D-325), so the
+         * row reads TO <ROOM> with the target's glyph between BEGIN at the source and the hand-over
+         * at the target. Never the pattern itself, which is in no client type (F-015).
+         *
+         * **One digit on every known line, always encoded**, so an order is the same width whether
+         * or not a pattern is held and whatever the line is: the smallest same-width addition. It
+         * rides `WorkOrderIssued`, whose schema row (this seat, the living classes) is unchanged.
+         */
+        @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+        @kotlinx.serialization.EncodeDefault
+        val pattern: Int = 0,
+    ) : OrderLine {
+        init {
+            require(pattern == 0 || pattern == 1) { "a line's pattern digit is 0 or 1, never $pattern" }
+        }
+    }
 
     /**
      * **A known unknown**: something is there, and that is the whole of what the player learns —

@@ -95,6 +95,14 @@ sealed interface Intent {
     data class StopSubroutine(val actor: Seat) : Intent
 
     /**
+     * **BEGIN on a caught scan that offered something to carry** (D-325): a Memory Dump's source,
+     * whose pattern is held from here, or an Array Wipe's first Spares, whose first disk is taken
+     * here. The actor and nothing else, for [StopSubroutine]'s reason: what was offered is the
+     * house's record of this seat's last scan ([Event.CarryBegun]).
+     */
+    data class BeginCarry(val actor: Seat) : Intent
+
+    /**
      * **This phone stopped reading the Terminal** (D-199, D-203). The actor and nothing else, as
      * [StopSubroutine] reports the actor and nothing else: no reason, no place.
      */

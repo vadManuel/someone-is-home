@@ -79,6 +79,8 @@ class LightSignatureTest {
         // header somebody is tempted to leave out of the frame.
         ScreenId.SubInterrupt to mapOf(LightSignature.Medium to 1),
         ScreenId.SubDrift to mapOf(LightSignature.Medium to 1),
+        // Memory Dump's one screen, rated MEDIUM (D-325).
+        ScreenId.SubMemory to mapOf(LightSignature.Medium to 1),
     )
 
     private fun SemanticsNodeInteractionsProvider.marks(): Map<LightSignature, Int> =

@@ -306,7 +306,8 @@ class HandOverLoopTest {
             }
         }
 
-        // Every kind but Memory Dump, whose screens are STOPPED for the owner (D-322).
+        // Every kind played at one card: Memory Dump spans two and is walked end to end over the
+        // sockets by `SubroutineQuestionWiringTest` (D-325).
         val playable = SubroutineKind.entries.toSet() - SubroutineKind.MemoryDump
         assertEquals(
             playable, reached,

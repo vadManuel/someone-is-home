@@ -452,6 +452,12 @@ sealed interface Effect {
          * A Memory Dump pattern is never here (F-015, *only your head is off-network*).
          */
         val carrying: DiskInHand? = null,
+        /**
+         * **The first Spares of an Array Wipe, briefed** (the owner's 2026-11-22 ruling, D-325):
+         * the phone shows the caught scan with the circuit's line and BEGIN takes the disk
+         * ([Event.CarryBegun]). False on every other answer.
+         */
+        val circuit: Boolean = false,
     ) : Effect {
         init {
             require(haptic == null || haptic == Haptic.Double) { "a scan's answer says no or nothing, never $haptic" }

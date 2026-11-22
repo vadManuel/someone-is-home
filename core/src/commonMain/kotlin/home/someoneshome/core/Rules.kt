@@ -73,6 +73,7 @@ private fun dispatch(state: GameState, event: Event): Reduction<GameState, Effec
     is Event.MarkerScanned -> scanned(state, event)
 
     is Event.PerformanceEnded -> performanceEnded(state, event)
+    is Event.CarryBegun -> carryBegun(state, event)
 
     is Event.TerminalLeft -> terminalLeft(state, event)
     is Event.TimelapsePlayed -> timelapsePlayed(state, event)
@@ -414,7 +415,7 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
     return Reduction(
         state,
         seats.map { Effect.LampSet(it, LAMP_DIM) } +
-            orders.map { Effect.WorkOrderIssued(it.seat, it.asLines(state.destinations)) } +
+            orders.map { Effect.WorkOrderIssued(it.seat, state.orderLinesFor(it.seat)) } +
             seats.map { Effect.OpeningMessage(it, HOUSE_TEXT_BUZZ, state.revokeCooldown) } +
             // **The roster, one per seat, and every copy of it is the same list** (D-115).
             //
@@ -573,6 +574,7 @@ private fun stationScanned(state: GameState, event: Event.MarkerScanned): Reduct
     val reading = !state.isOut(event.actor) && state.meeting == null &&
         (holder == null || holder.index == event.actor.index)
     val next = spend(state, event.actor)
+        .offering(event.actor, null)
         .withPresence(Presence(event.actor, event.marker, open = false, since = event.at))
         .let { if (reading) it.withReader(event.actor) else it }
     // Both constructed once, outside the decision above.
@@ -631,6 +633,11 @@ private fun markerScanned(state: GameState, event: Event.MarkerScanned): Reducti
         stepAt(state, event.actor, event.marker)
     }
 
+    // **What this scan offers and BEGIN would take** (D-325): a Memory Dump's source offers its
+    // pattern, and an Array Wipe's Spares offers its first disk with the circuit's briefing (the
+    // owner's 2026-11-22 ruling). Nothing is held until BEGIN; the seat's last offer is replaced by
+    // this one, or dropped, on every scan. Spares after the first disk steps as D-322 built it.
+    val briefed = step is ScanStep.TakeDisk && step.entry.wiped == 0
     // What the house holds armed for a hand-over at this card: a Subroutine's question with its
     // answer, or a Memory Dump target whose answer is the pattern the house has been holding.
     val instance: OpenSubroutine? = when (step) {
@@ -653,18 +660,27 @@ private fun markerScanned(state: GameState, event: Event.MarkerScanned): Reducti
     // then the step's own transition on the carry, and the circuit's completion at its last disk.
     val opened = if (instance == null) spend(minted, event.actor) else minted.withOpenSubroutine(instance)
     val finished = step is ScanStep.DisposeDisk && lastDisk(step.entry)
+    val offered = when {
+        step is ScanStep.ShowPattern ->
+            Carry.Pattern(event.actor, step.entry.index, shown?.parameters.orEmpty().drop(1))
+        briefed -> Carry.Disk(event.actor, (step as ScanStep.TakeDisk).entry.index, disk = 1, damaged = false)
+        else -> null
+    }
     val stepped = when (step) {
-        is ScanStep.ShowPattern ->
-            opened.carrying(Carry.Pattern(event.actor, step.entry.index, shown?.parameters.orEmpty().drop(1)))
-        is ScanStep.TakeDisk ->
-            opened.carrying(Carry.Disk(event.actor, step.entry.index, disk = step.entry.wiped + 1, damaged = false))
-        is ScanStep.SwapDisk -> opened.carrying(step.disk.swapped())
+        is ScanStep.ShowPattern -> opened.offering(event.actor, offered)
+        is ScanStep.TakeDisk -> if (briefed) {
+            opened.offering(event.actor, offered)
+        } else {
+            opened.offering(event.actor, null)
+                .carrying(Carry.Disk(event.actor, step.entry.index, disk = step.entry.wiped + 1, damaged = false))
+        }
+        is ScanStep.SwapDisk -> opened.offering(event.actor, null).carrying(step.disk.swapped())
         is ScanStep.DisposeDisk -> {
-            val down = opened.putDown(event.actor, step.entry.index)
+            val down = opened.offering(event.actor, null).putDown(event.actor, step.entry.index)
             val wiped = down.workOrderFor(event.actor)?.let { down.withWorkOrder(it.withWiped(step.entry.index)) } ?: down
             if (finished) wiped.completing(event.actor, step.entry.index, event.at) else wiped
         }
-        is ScanStep.Open, is ScanStep.EnterPattern, ScanStep.Nothing -> opened
+        is ScanStep.Open, is ScanStep.EnterPattern, ScanStep.Nothing -> opened.offering(event.actor, null)
     }
     // **The circuit's last disk is the one completion a scan makes, and it banks as a hand-over
     // does** (D-109): a plain Resident's moves the meter, an Insider's writes nothing. The only place
@@ -694,10 +710,13 @@ private fun markerScanned(state: GameState, event: Event.MarkerScanned): Reducti
         // either phone.
         haptic = if (shown == null && !node && !step.isStationStep) Haptic.Double else null,
         carrying = next.diskOf(event.actor)?.inHand(),
+        // **The circuit's briefing, on the first Spares** (D-325): the phone shows the caught scan
+        // with the Array Wipe's line, and BEGIN takes the disk. Off the step, never the role.
+        circuit = briefed,
     )
     val order = Effect.WorkOrderIssued(
         seat = event.actor,
-        lines = next.workOrderFor(event.actor)?.asLines(next.destinations) ?: emptyList(),
+        lines = next.orderLinesFor(event.actor),
     )
     val placed = Effect.PresenceChanged(event.actor, event.marker, open = shown != null)
     return Reduction(
@@ -745,6 +764,41 @@ private fun performanceEnded(
     val next = spend(state, event.actor)
         .withPresence(Presence(event.actor, where, open = false, since = event.at))
     return Reduction(next, listOf(Effect.PresenceChanged(event.actor, where, open = false)))
+}
+
+/**
+ * **BEGIN on a caught scan that offered a carry** (D-325): what the house's answer offered this
+ * seat is taken into its hands.
+ *
+ * - **A Memory Dump's pattern is held from here** (the build's call, provisional, recorded in
+ *   D-325): BEGIN starts the playback, and NOT THIS ONE, which sends nothing, holds nothing. A
+ *   pattern already held for the line is replaced, as a fresh source scan replaced it in D-322.
+ * - **An Array Wipe's first disk is taken here** (the owner's 2026-11-22 ruling): the first Spares
+ *   is briefed, and BEGIN takes DISK 01.
+ *
+ * ### The shapes, and why they differ only by what the seat itself was offered
+ *
+ * **The order goes back every time**, constructed once: it is what tells the phone the pattern is
+ * held (the row reads TO <ROOM>), and a BEGIN that changed nothing answers with the same order.
+ * **A disk taken also answers as a station step does** ([Effect.ScanAnswered] with the disk in
+ * hand), which is what moves the phone to the widget (D-322). Which of the two was offered is the
+ * seat's own scan, already answered to it; no role is read and nobody else is told anything.
+ *
+ * A seat that is out takes nothing, for [markerScanned]'s reason.
+ */
+private fun carryBegun(state: GameState, event: Event.CarryBegun): Reduction<GameState, Effect> {
+    val offer = state.offerOf(event.actor)?.takeUnless { state.isOut(event.actor) }
+    val taken = offer?.carry
+    val next = if (taken == null) state else state.offering(event.actor, null).carrying(taken)
+    val order = Effect.WorkOrderIssued(seat = event.actor, lines = next.orderLinesFor(event.actor))
+    return Reduction(
+        next,
+        if (taken is Carry.Disk) {
+            listOf(Effect.ScanAnswered(seat = event.actor, opened = null, haptic = null, carrying = next.diskOf(event.actor)?.inHand()), order)
+        } else {
+            listOf(order)
+        },
+    )
 }
 
 /** D-110's spend, for a seat that may have nothing open. A no-op is the fail-closed direction. */
@@ -1515,7 +1569,7 @@ private fun returned(
     val verdict = Effect.SubroutineGraded(seat = event.actor, accepted = accepted)
     val order = Effect.WorkOrderIssued(
         seat = event.actor,
-        lines = next.workOrderFor(event.actor)?.asLines(next.destinations) ?: emptyList(),
+        lines = next.orderLinesFor(event.actor),
     )
     val closed = Effect.PresenceChanged(event.actor, where, open = false)
     return Reduction(
@@ -1560,7 +1614,7 @@ private fun chainUnlocked(state: GameState, event: Event.ChainUnlocked): Reducti
     val next = state.workOrderFor(event.seat)?.let { state.withWorkOrder(it.withReleased(event.entry)) } ?: state
     val order = Effect.WorkOrderIssued(
         seat = event.seat,
-        lines = next.workOrderFor(event.seat)?.asLines(next.destinations) ?: emptyList(),
+        lines = next.orderLinesFor(event.seat),
     )
     return Reduction(next, listOf(order, Effect.WorkUnblocked(event.seat, HOUSE_TEXT_BUZZ)))
 }

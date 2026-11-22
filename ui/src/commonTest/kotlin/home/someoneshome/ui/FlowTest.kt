@@ -886,7 +886,7 @@ class FlowTest {
                 ScreenId.SubHandshake, ScreenId.SubReplay, ScreenId.SubParity,
                 ScreenId.SubShort, ScreenId.SubTrace, ScreenId.SubJam,
                 ScreenId.SubSniff, ScreenId.SubDeallocate,
-                ScreenId.SubInterrupt, ScreenId.SubDrift,
+                ScreenId.SubInterrupt, ScreenId.SubDrift, ScreenId.SubMemory,
             ),
             Flow.viaActions.keys,
             "a new action edge was declared and nothing here walks it",

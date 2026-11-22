@@ -280,7 +280,7 @@ private fun firedBy(event: Event): Seat? = when (event) {
     is Event.EgressFired -> event.actor
 
     is Event.RoundArmed, is Event.MarkerScanned, is Event.SubroutineReturned,
-    is Event.PerformanceEnded, is Event.ContactMade, is Event.RadioFaulted, is Event.MeetingCalled,
+    is Event.PerformanceEnded, is Event.CarryBegun, is Event.ContactMade, is Event.RadioFaulted, is Event.MeetingCalled,
     is Event.MeetingCheckedIn, is Event.ReadyToVoteDeclared, is Event.DiscussionClosed,
     is Event.VoteSelected, is Event.VoteLocked, is Event.VoteWindowClosed,
     is Event.TallyHalfwayReached, is Event.MeetingClosed,
@@ -331,6 +331,7 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     // would leave the presence plane holding a window that never shut, and the one consumer it has
     // is an expiry (D-136).
     is Event.PerformanceEnded -> null
+    is Event.CarryBegun -> null
 
     // Not a meeting event, and not refused during one, for [Event.PerformanceEnded]'s reason: the
     // live view closes wherever the reader is when the house rings, and a phone whose connection
@@ -383,7 +384,7 @@ private fun isTierTwo(event: Event): Boolean = when (event) {
     is Event.SurgeFired, is Event.IsolateFired, is Event.StaticFired -> true
 
     is Event.RoundArmed, is Event.MarkerScanned, is Event.SubroutineReturned,
-    is Event.PerformanceEnded, is Event.RevokeArmed, is Event.ContactMade, is Event.RadioFaulted,
+    is Event.PerformanceEnded, is Event.CarryBegun, is Event.RevokeArmed, is Event.ContactMade, is Event.RadioFaulted,
     is Event.MeetingCalled, is Event.MeetingCheckedIn, is Event.ReadyToVoteDeclared,
     is Event.DiscussionClosed, is Event.VoteSelected, is Event.VoteLocked,
     is Event.VoteWindowClosed, is Event.TallyHalfwayReached, is Event.MeetingClosed,
@@ -409,7 +410,7 @@ private fun needsEgress(event: Event): Boolean = when (event) {
     is Event.SyncPulseReturned, is Event.EgressExpired -> true
 
     is Event.RoundArmed, is Event.MarkerScanned, is Event.SubroutineReturned,
-    is Event.PerformanceEnded, is Event.RevokeArmed, is Event.ContactMade, is Event.RadioFaulted,
+    is Event.PerformanceEnded, is Event.CarryBegun, is Event.RevokeArmed, is Event.ContactMade, is Event.RadioFaulted,
     is Event.MeetingCalled, is Event.MeetingCheckedIn, is Event.ReadyToVoteDeclared,
     is Event.DiscussionClosed, is Event.VoteSelected, is Event.VoteLocked,
     is Event.VoteWindowClosed, is Event.TallyHalfwayReached, is Event.MeetingClosed,

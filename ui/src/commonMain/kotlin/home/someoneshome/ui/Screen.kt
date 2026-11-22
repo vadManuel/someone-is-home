@@ -233,6 +233,9 @@ fun Screen(
                 ScreenId.SubDeallocate -> DeallocateScreen(state.verdict)
                 ScreenId.SubInterrupt -> InterruptScreen(state.verdict)
                 ScreenId.SubDrift -> DriftScreen(state.verdict)
+                // The verdict and the two rooms of its own line (D-325), never `vals`: the carry
+                // line and the mismatch name them, and nothing else about the phone reaches it.
+                ScreenId.SubMemory -> MemoryDumpScreen(state.verdict, vals.current?.let { MemoryDumpRooms.of(it) })
                 ScreenId.Files -> FilesScreen(vals)
                 ScreenId.TermLive -> TermLiveScreen(vals)
                 ScreenId.Timelapse -> TimelapseScreen(vals)

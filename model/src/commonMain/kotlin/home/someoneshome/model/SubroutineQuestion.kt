@@ -1256,18 +1256,20 @@ class MemoryPattern private constructor(
         /** The first parameter at the target. */
         const val TARGET: Int = 1
 
-        /** `gdd.md:646`: *four elements, maybe five.* */
-        const val LEAST: Int = 4
-        const val MOST: Int = 5
+        /**
+         * `gdd.md:646`: *four elements, maybe five.* **Fixed at four** (the owner approved the
+         * draft as drawn, 2026-11-22, D-325): Replay's dots in a 2×2 grid, each place once.
+         */
+        const val LENGTH: Int = 4
 
         fun of(parameters: List<Int>): MemoryPattern {
             val stage = parameters.firstOrNull()
             return when (stage) {
                 SOURCE -> {
                     val elements = parameters.drop(1)
-                    if (elements.size !in LEAST..MOST) {
+                    if (elements.size != LENGTH) {
                         throw MalformedSubroutineParameters(
-                            "MEMORY DUMP shows $LEAST to $MOST elements and this is ${elements.size}: $parameters",
+                            "MEMORY DUMP shows $LENGTH elements and this is ${elements.size}: $parameters",
                         )
                     }
                     if (elements.any { it !in elements.indices } || elements.toSet().size != elements.size) {
@@ -1280,12 +1282,12 @@ class MemoryPattern private constructor(
                 }
                 TARGET -> {
                     val length = parameters.getOrNull(1)
-                    if (parameters.size != 2 || length == null || length !in LEAST..MOST) {
+                    if (parameters.size != 2 || length != LENGTH) {
                         throw MalformedSubroutineParameters(
-                            "MEMORY DUMP's target asks for $LEAST to $MOST elements and this is $parameters",
+                            "MEMORY DUMP's target asks for $LENGTH elements and this is $parameters",
                         )
                     }
-                    MemoryPattern(shown = false, elements = emptyList(), length = length)
+                    MemoryPattern(shown = false, elements = emptyList(), length = LENGTH)
                 }
                 else -> throw MalformedSubroutineParameters(
                     "MEMORY DUMP's first number says which card this is, $SOURCE or $TARGET: $parameters",

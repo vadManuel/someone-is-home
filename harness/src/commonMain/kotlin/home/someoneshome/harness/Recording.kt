@@ -50,6 +50,14 @@ class Recording(
     }
 
     companion object {
+        // 52 (D-325): Memory Dump is dealt (its screens are built), so the same seed draws a long into
+        // every order again, and its pattern is four elements drawn without a length draw, so a
+        // version 51 round replays to different work. One event a 51 build cannot construct,
+        // `CarryBegun` (`actor=`), BEGIN on a caught scan that offered a carry: a Memory Dump's source
+        // or an Array Wipe's first Spares, now briefed. `ScanAnswered` gains `circuit=`; the state
+        // row's `carries=` gains `:offered:` entries, what a scan showed before BEGIN took it. A
+        // version 51 recording is refused here as every older one is.
+        //
         // 51 (D-324): chains link plain Residents only (the owner's 2026-11-22 ruling). The same seed
         // draws different links, the Residents chained in the cycle's order and every Insider's locked
         // line a fake hold timed off the Resident before it, so a version 50 round would replay to
@@ -427,7 +435,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/51"
+        const val HEADER = "someone-is-home/recording/52"
     }
 }
 

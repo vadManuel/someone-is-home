@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Balance
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.Effect
@@ -79,7 +80,8 @@ class VerdictBuzzTest {
 
     private fun GameState.workCard(seat: Seat): MarkerId {
         val order = assertNotNull(workOrderFor(seat), "seat ${seat.index} holds no work order")
-        val entry = order.entries.first { order.isActionable(it) && it.work.opensAs != null && it.anchor != null }
+        // A Subroutine of one card: a Memory Dump source shows its pattern and opens no window (D-325).
+        val entry = order.entries.first { order.isActionable(it) && it.work is AssignedWork.Subroutine && it.anchor != null }
         return assertNotNull(entry.anchor, "seat ${seat.index}'s work has no card")
     }
 

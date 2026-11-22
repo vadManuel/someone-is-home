@@ -96,6 +96,20 @@ sealed interface Carry {
      * scan, and no ruling says a pattern held in memory does. Flagged for the owner.
      */
     class Pattern(override val seat: Seat, override val entry: Int, val elements: List<Int>) : Carry
+
+    /**
+     * **What a scan showed and BEGIN would take: offered, not yet held** (D-325).
+     *
+     * A Memory Dump's source shows its pattern and the first Spares of an Array Wipe shows its
+     * briefing, each on the caught scan, and **nothing is held until the player presses BEGIN**
+     * ([Event.CarryBegun]): NOT THIS ONE holds nothing. Until then the house keeps what it showed
+     * here, one per seat, and the seat's next scan of any card replaces it. It is not [Disk] and not
+     * [Pattern], so it blocks no scan, opens no target and is in no phone's Files.
+     */
+    class Offered(val carry: Carry) : Carry {
+        override val seat: Seat get() = carry.seat
+        override val entry: Int get() = carry.entry
+    }
 }
 
 /**

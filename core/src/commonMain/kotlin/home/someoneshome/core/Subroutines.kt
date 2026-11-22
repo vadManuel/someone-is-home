@@ -143,13 +143,11 @@ internal fun drawParameters(kind: SubroutineKind, draw: Draw): List<Int> = when 
         }
     }
 
-    // The source's question: the pattern itself, four or five elements (`gdd.md:646`). The scan
-    // handler draws it through [patternFor] off the same stream; this branch is the same draw, so a
-    // sweep of every kind through [drawParameters] reads a Memory Dump the way a phone would.
-    SubroutineKind.MemoryDump -> {
-        val length = MemoryPattern.LEAST + draw.next(MemoryPattern.MOST - MemoryPattern.LEAST + 1)
-        listOf(MemoryPattern.SOURCE) + List(length) { it }.shuffledBy(draw)
-    }
+    // The source's question: the pattern itself, four elements (`gdd.md:646`, fixed at four by
+    // D-325). The scan handler draws it through [patternFor] off the same stream; this branch is the
+    // same draw, so a sweep of every kind through [drawParameters] reads a Memory Dump the way a
+    // phone would.
+    SubroutineKind.MemoryDump -> listOf(MemoryPattern.SOURCE) + List(MemoryPattern.LENGTH) { it }.shuffledBy(draw)
 }
 
 /**

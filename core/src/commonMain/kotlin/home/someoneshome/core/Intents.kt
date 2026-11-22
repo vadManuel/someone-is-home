@@ -64,6 +64,8 @@ fun factOf(intent: Intent, at: Tick): Event = when (intent) {
     // neither needs a draw -- which is exactly why they could have travelled from the day the
     // channel existed, and the gap was a missing member rather than a missing argument (E-P2-5).
     is Intent.StopSubroutine -> Event.PerformanceEnded(at, intent.actor)
+    // BEGIN where the scan offered a carry (D-325). The actor alone, for STOP NOW's reason.
+    is Intent.BeginCarry -> Event.CarryBegun(at, intent.actor)
     // The live view closed. The actor alone, for STOP NOW's reason (D-203).
     is Intent.LeaveTerminal -> Event.TerminalLeft(at, intent.actor)
     // The timelapse, asked for and stopped (D-319). The actor alone, for STOP NOW's reason.

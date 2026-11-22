@@ -40,7 +40,7 @@ class PermissionCloseRecordingTest {
         val (end, recording) = record(GameState.EMPTY, events)
         assertTrue(end.closed && end.ended && end.outcome == null, "the fixture never closed the house")
         val text = recording.toText()
-        assertTrue(text.startsWith("someone-is-home/recording/51\n"), "the format was not bumped: ${text.lineSequence().first()}")
+        assertTrue(text.startsWith("someone-is-home/recording/52\n"), "the format was not bumped: ${text.lineSequence().first()}")
         assertTrue(text.lines().any { it.startsWith("E RadioFaulted") && it.contains("|cause=Permission") }, "the cause was not recorded")
         assertTrue(text.lines().any { it.startsWith("E HouseClosedOnPermission") && it.endsWith("|seat=2") }, "the close was not recorded")
         assertTrue(text.lines().any { it.startsWith("F NoticeIssued|unreachable=4|switchedOff=3") }, "the two lists of the notice were not recorded apart (D-311)")

@@ -109,6 +109,9 @@ object Transcript {
         // grow, and it would grow in the artifact kept specifically to find out what happened.
         is Event.PerformanceEnded ->
             row("PerformanceEnded", event.at, "actor" to num(event.actor.index))
+        // BEGIN where a scan offered a carry (D-325): the actor alone, for PerformanceEnded's reason.
+        is Event.CarryBegun ->
+            row("CarryBegun", event.at, "actor" to num(event.actor.index))
         // The actor alone, for PerformanceEnded's reason: a reason here would be a record of how
         // somebody left the station (D-203).
         is Event.TerminalLeft ->
@@ -337,8 +340,10 @@ object Transcript {
                 } ?: "none") + "|haptic=${effect.haptic ?: "none"}" +
                 // The disk in hand on every answer, `none` for empty hands (D-322): a station step and
                 // a refusal stay one row shape, and the step is the field moving.
-                "|carrying=" + (effect.carrying?.let { "${num(it.disk)}>${it.to}" } ?: "none")
-        // The upstream seat and its own line; nobody else is on the row (D-322).
+                "|carrying=" + (effect.carrying?.let { "${num(it.disk)}>${it.to}" } ?: "none") +
+                // The circuit's briefing on the first Spares (D-325).
+                "|circuit=${effect.circuit}"
+        // The downstream seat and the buzz; nobody else is on the row (D-322, D-324).
         is Effect.WorkUnblocked -> "WorkUnblocked|seat=${effect.seat.index}|haptic=${effect.haptic}"
         // Open and held are one kind and one row shape, for ScanAnswered's reason (D-199).
         is Effect.TerminalAnswered ->
@@ -710,6 +715,13 @@ object Transcript {
                     is home.someoneshome.model.Carry.Pattern ->
                         "${num(carry.seat.index)}.${num(carry.entry)}:pattern" +
                             carry.elements.joinToString(".", prefix = ":") { num(it) }
+                    // Offered by a scan and not yet taken by BEGIN (D-325).
+                    is home.someoneshome.model.Carry.Offered -> "${num(carry.seat.index)}.${num(carry.entry)}:offered:" +
+                        when (val c = carry.carry) {
+                            is home.someoneshome.model.Carry.Pattern -> "pattern" + c.elements.joinToString(".", prefix = ":") { num(it) }
+                            is home.someoneshome.model.Carry.Disk -> "disk${num(c.disk)}"
+                            is home.someoneshome.model.Carry.Offered -> "nested"
+                        }
                 }
             }
         )

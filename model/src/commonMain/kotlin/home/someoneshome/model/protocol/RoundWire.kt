@@ -386,9 +386,17 @@ sealed class RoundMessage {
          * [home.someoneshome.model.Effect.ScanAnswered.carrying].
          */
         val carrying: DiskInHand? = null,
+        /**
+         * **1 on an Array Wipe's first Spares, briefed; 0 otherwise** (D-325). One digit, always on
+         * the wire, for [no]'s reason.
+         */
+        @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+        @kotlinx.serialization.EncodeDefault
+        val circuit: Int = 0,
     ) : RoundMessage() {
         init {
             require(no == NO || no == QUIET) { "a scan's answer says no or nothing, never $no" }
+            require(circuit == 0 || circuit == 1) { "a scan's circuit digit is 0 or 1, never $circuit" }
         }
 
         /** The answer with the rules' buzz ([Haptic.Double] or nothing) and the disk in hand. */
@@ -396,7 +404,8 @@ sealed class RoundMessage {
             opened: SubroutineInstance?,
             haptic: Haptic? = null,
             carrying: DiskInHand? = null,
-        ) : this(opened, if (haptic == Haptic.Double) NO else QUIET, carrying)
+            circuit: Boolean = false,
+        ) : this(opened, if (haptic == Haptic.Double) NO else QUIET, carrying, if (circuit) 1 else 0)
 
         /** D-160's *no* on NOTHING FOR YOU HERE, nothing otherwise: the effect's own value. */
         val haptic: Haptic? get() = if (no == NO) Haptic.Double else null
@@ -1487,7 +1496,7 @@ object RoundWire {
         is Effect.SystemIntegrityBatched -> RoundMessage.SystemIntegrityBatched(effect.percent)
         is Effect.MessageDelivered -> RoundMessage.MessageDelivered(effect.body)
         is Effect.WorkOrderIssued -> RoundMessage.WorkOrderIssued(effect.lines)
-        is Effect.ScanAnswered -> RoundMessage.ScanAnswered(effect.opened, effect.haptic, effect.carrying)
+        is Effect.ScanAnswered -> RoundMessage.ScanAnswered(effect.opened, effect.haptic, effect.carrying, effect.circuit)
         // The seat comes off; the entry is this phone's own line.
         // The seat comes off and nothing is left: the socket is the address.
         is Effect.WorkUnblocked -> RoundMessage.WorkUnblocked(effect.haptic)

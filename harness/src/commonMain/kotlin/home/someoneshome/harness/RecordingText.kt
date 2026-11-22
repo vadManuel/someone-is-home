@@ -288,6 +288,7 @@ object RecordingText {
             "SubroutineReturned" ->
                 Event.SubroutineReturned(at, seat("actor"), marker("marker"), ints("entered"))
             "PerformanceEnded" -> Event.PerformanceEnded(at, seat("actor"))
+            "CarryBegun" -> Event.CarryBegun(at, seat("actor"))
             "TerminalLeft" -> Event.TerminalLeft(at, seat("actor"))
             "TimelapsePlayed" -> Event.TimelapsePlayed(at, seat("actor"))
             "TimelapseStopped" -> Event.TimelapseStopped(at, seat("actor"))
@@ -346,6 +347,7 @@ object RecordingText {
         "MarkerScanned" -> setOf("at", "actor", "marker")
         "SubroutineReturned" -> setOf("at", "actor", "marker", "entered")
         "PerformanceEnded" -> setOf("at", "actor")
+        "CarryBegun" -> setOf("at", "actor")
         "TerminalLeft" -> setOf("at", "actor")
         "TimelapsePlayed" -> setOf("at", "actor")
         "TimelapseStopped" -> setOf("at", "actor")

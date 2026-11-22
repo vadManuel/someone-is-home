@@ -46,14 +46,18 @@ class SubroutineTest {
      */
     @Test
     fun theRosterIsTheDesignsTenWithTheDesignsSpread() {
-        assertEquals(10, Subroutine.entries.size, "the design's roster is ten Subroutines")
+        // The design's ten, and the long beside them since D-325 (rated MEDIUM, outside the spread).
+        val ten = Subroutine.entries - Subroutine.MemoryDump
+        assertEquals(10, ten.size, "the design's roster is ten Subroutines")
+        assertEquals(SubroutineTier.Long, Subroutine.MemoryDump.tier, "Memory Dump is not the long")
+        assertEquals(LightSignature.Medium, Subroutine.MemoryDump.light, "Memory Dump is not rated MEDIUM (D-325)")
         assertEquals(
             mapOf(
                 LightSignature.Bright to 3,
                 LightSignature.Medium to 4,
                 LightSignature.Dark to 3,
             ),
-            Subroutine.entries.groupingBy { it.light }.eachCount(),
+            ten.groupingBy { it.light }.eachCount(),
             "the roster spreads 3 bright / 4 medium / 3 dark (gdd.md:561)",
         )
     }

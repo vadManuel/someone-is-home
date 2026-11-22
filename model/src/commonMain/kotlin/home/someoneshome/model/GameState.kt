@@ -617,9 +617,34 @@ class GameState private constructor(
             ).sortedWith(compareBy({ it.seat.index }, { it.entry })),
     )
 
+    /** What a scan offered [seat] and BEGIN would take, or null (D-325). */
+    fun offerOf(seat: Seat): Carry.Offered? =
+        carries.firstOrNull { it.seat.index == seat.index && it is Carry.Offered } as Carry.Offered?
+
+    /**
+     * [seat]'s offer replaced by [offer], or dropped where it is null (D-325). Nothing [seat] holds
+     * is touched: a pattern held from an earlier source stays held until BEGIN replaces it.
+     */
+    fun offering(seat: Seat, offer: Carry?): GameState = copy(
+        carries = (
+            carries.filterNot { it.seat.index == seat.index && it is Carry.Offered } +
+                listOfNotNull(offer?.let { Carry.Offered(it) })
+            ).sortedWith(compareBy({ it.seat.index }, { it.entry })),
+    )
+
+    /**
+     * **This seat's order as its phone sees it** (D-114), with every Memory Dump line whose pattern
+     * the house holds marked so (D-325): the one way every producer of a client order says it.
+     */
+    fun orderLinesFor(seat: Seat): List<OrderLine> =
+        workOrderFor(seat)?.asLines(
+            destinations,
+            patterns = carries.filter { it.seat.index == seat.index && it is Carry.Pattern }.map { it.entry },
+        ) ?: emptyList()
+
     /** Empty [seat]'s hands of what it carried for [entry]. A no-op for a seat that held nothing. */
     fun putDown(seat: Seat, entry: Int): GameState =
-        copy(carries = carries.filterNot { it.seat.index == seat.index && it.entry == entry })
+        copy(carries = carries.filterNot { it.seat.index == seat.index && it.entry == entry && it !is Carry.Offered })
 
     /** Replace the links, for the two transitions on [ChainLink]. */
     fun withLinks(replacement: List<ChainLink>): GameState = copy(links = replacement)

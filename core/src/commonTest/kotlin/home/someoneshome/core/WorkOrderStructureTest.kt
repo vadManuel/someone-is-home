@@ -58,7 +58,22 @@ private fun hand(state: GameState, seat: Seat, card: MarkerId, entered: List<Int
 
 /** The disk in [seat]'s hand after the last scan, off the house's own answer. */
 private fun carried(effects: List<Effect>): DiskInHand? =
-    effects.filterIsInstance<Effect.ScanAnswered>().single().carrying
+    effects.filterIsInstance<Effect.ScanAnswered>().last().carrying
+
+/** BEGIN, on whatever the seat's last scan offered (D-325). */
+private fun begin(state: GameState, seat: Seat, clock: Clock) =
+    reduce(state, Event.CarryBegun(clock.next(), seat))
+
+/**
+ * **A station scanned the way a player walks it** (D-325): the first Spares is briefed, so BEGIN
+ * follows it; every other station is the scan alone. The effects of both, in order.
+ */
+private fun station(state: GameState, seat: Seat, card: MarkerId, clock: Clock): Reduction<GameState, Effect> {
+    val scanned = scan(state, seat, card, clock)
+    if (!scanned.effects.filterIsInstance<Effect.ScanAnswered>().single().circuit) return scanned
+    val begun = begin(scanned.state, seat, clock)
+    return Reduction(begun.state, scanned.effects + begun.effects)
+}
 
 /**
  * **Finish [entry] of [seat]'s order the way a player would**, first finishing whatever of its own
@@ -81,12 +96,13 @@ private fun finish(start: GameState, seat: Seat, entry: Int, clock: Clock): Game
         }
         AssignedWork.MemoryDump -> {
             state = scan(state, seat, line.markers[0], clock).state
+            state = begin(state, seat, clock).state
             val pattern = assertNotNull(state.patternOf(seat, entry), "the source held no pattern").elements
             state = scan(state, seat, line.markers[1], clock).state
             state = hand(state, seat, line.markers[1], pattern, clock).state
         }
         AssignedWork.ArrayWipe -> repeat(Balance.ARRAY_WIPE_DISKS) {
-            for (station in line.markers) state = scan(state, seat, station, clock).state
+            for (card in line.markers) state = station(state, seat, card, clock).state
         }
     }
     assertTrue(state.workOrderFor(seat)!!.entries[entry].done, "entry $entry of seat ${seat.index} did not finish")
@@ -118,28 +134,6 @@ private fun drawn(state: GameState): String = state.workOrders.joinToString("\n"
 /** The effects [seat]'s phone is delivered, in order. */
 private fun deliveredTo(seat: Seat, effects: List<Effect>, state: GameState): List<Effect> =
     effects.filter { e -> EmitSchema.deliveries(e, state).any { it.seat.index == seat.index } }
-
-/**
- * **A Memory Dump put into [seat]'s order by hand** (D-323 A). The mix deals none while
- * [Balance.MEMORY_DUMP_DEALT] is off, so Memory Dump's house half is tested on a line planted here
- * rather than one the draw dealt. The first Subroutine line of the order that nothing holds and
- * nothing of its own is chained before becomes a Memory Dump from its own card to the first card of
- * [cards] the order does not use, so the planted target chains nothing. Nothing here reads a role:
- * two rounds that differ only in who is an Insider get the same line.
- */
-private fun GameState.withMemoryDump(seat: Seat, cards: List<MarkerId> = CARDS): GameState {
-    val order = workOrderFor(seat)!!
-    val line = order.entries.first { it.work is AssignedWork.Subroutine && !it.held && it.blockedBy.isEmpty() }
-    val target = cards.first { c -> order.entries.none { it.isAt(c) } }
-    val planted = OrderEntry(
-        index = line.index,
-        work = AssignedWork.MemoryDump,
-        markers = listOf(line.anchor!!, target),
-        blockedBy = emptyList(),
-        done = false,
-    )
-    return withWorkOrder(WorkOrder(seat, order.entries.map { if (it.index == line.index) planted else it }))
-}
 
 // =================================================================================================
 
@@ -219,38 +213,30 @@ class OrderMixTest {
     }
 
     /**
-     * **GUARD (D-323 A): no Memory Dump is dealt while its screens are unbuilt.** The owner's
-     * 2026-11-22 ruling: no phone can open one, so dealt into every order it left every seat a line
-     * nobody could finish and the meter out of reach. While [Balance.MEMORY_DUMP_DEALT] is off the
-     * long's share is medium, every order still sums to `K`, and no order of any round, the
-     * Insider's fake included, holds a Memory Dump.
+     * **GUARD (D-325): the switch is on, and the design's mix is dealt.** Memory Dump's screens are
+     * built from the owner's approved draft, so [Balance.MEMORY_DUMP_DEALT] is true (it was false
+     * from D-323 A), [Balance.orderMix] is [Balance.designMix] for every `K`, and every order of
+     * every round, the Insider's fake included, holds the mix's Memory Dumps at two cards.
      */
     @Test
-    fun `no dealt order holds a Memory Dump while the switch is off`() {
-        assertEquals(false, Balance.MEMORY_DUMP_DEALT, "Memory Dump is dealt: its screens must exist first (D-323)")
-        for (k in 0..60) {
-            val design = Balance.designMix(k)
-            val dealt = Balance.orderMix(k)
-            assertEquals(k, dealt.values.sum(), "an order of $k was dealt ${dealt.values.sum()}")
-            assertEquals(0, dealt.getValue(SubroutineStructure.Long), "the mix deals a long at K=$k")
-            assertEquals(
-                design.getValue(SubroutineStructure.Medium) + design.getValue(SubroutineStructure.Long),
-                dealt.getValue(SubroutineStructure.Medium),
-                "the long's share at K=$k did not go to medium",
-            )
-            assertEquals(design.getValue(SubroutineStructure.Circuit), dealt.getValue(SubroutineStructure.Circuit))
-            assertEquals(design.getValue(SubroutineStructure.Short), dealt.getValue(SubroutineStructure.Short))
-        }
-        for (seats in 3..18) {
+    fun `the design's mix is dealt with a Memory Dump in every order`() {
+        assertEquals(true, Balance.MEMORY_DUMP_DEALT, "Memory Dump is not dealt, though its screens are built (D-325)")
+        for (k in 0..60) assertEquals(Balance.designMix(k), Balance.orderMix(k), "the order of $k is not the design's mix")
+        for (seats in 5..18) {
             for (seed in listOf(1L, 77L, 20261121L, 20261122L)) {
-                val insiders = listOf(Seat(seats - 1)) + if (seats >= 8) listOf(Seat(1)) else emptyList()
+                val insiders = insidersFor(seed, seatsOf(seats), null)
                 val state = armed(seats = seats, insiders = insiders, seed = seed).state
-                assertEquals(seats, state.workOrders.size, "a seat of $seats was dealt no order")
                 for (order in state.workOrders) {
-                    assertTrue(
-                        order.entries.none { it.work == AssignedWork.MemoryDump },
-                        "seat ${order.seat.index} of $seats (${state.roleOf(order.seat)}, seed $seed) was dealt a Memory Dump",
+                    val longs = Balance.orderMix(order.entries.size).getValue(SubroutineStructure.Long)
+                    assertTrue(longs >= 1, "an order of ${order.entries.size} deals no long")
+                    assertEquals(
+                        longs,
+                        order.entries.count { it.work == AssignedWork.MemoryDump },
+                        "seat ${order.seat.index} of $seats (${state.roleOf(order.seat)}, seed $seed) holds the wrong number of Memory Dumps",
                     )
+                    for (dump in order.entries.filter { it.work == AssignedWork.MemoryDump }) {
+                        assertEquals(2, dump.markers.distinctBy { it.value }.size, "a Memory Dump at one card")
+                    }
                 }
             }
         }
@@ -466,11 +452,11 @@ class ArrayWipeTest {
 
         val walk = mutableListOf<DiskInHand?>()
         for (disk in 1..2) {
-            for (station in listOf(spares, rack, disposal)) {
-                val step = scan(state, seat, station, clock)
+            for (card in listOf(spares, rack, disposal)) {
+                val step = station(state, seat, card, clock)
                 state = step.state
                 walk += carried(step.effects)
-                assertNull(step.effects.filterIsInstance<Effect.ScanAnswered>().single().opened, "a station opened a screen")
+                assertTrue(step.effects.filterIsInstance<Effect.ScanAnswered>().all { it.opened == null }, "a station opened a screen")
             }
             if (disk == 1) assertTrue(!circuitOf(state, seat).done, "one disk finished the circuit")
         }
@@ -492,7 +478,7 @@ class ArrayWipeTest {
         val seat = seatsOf(6).first { s -> armed().state.let { st -> st.alone(s, circuitOf(st, s).index) } }
         var (state, clock) = ready(seat)
         val wipe = circuitOf(state, seat)
-        state = scan(state, seat, wipe.markers[0], clock).state
+        state = station(state, seat, wipe.markers[0], clock).state
         assertNotNull(state.diskOf(seat), "Spares put nothing in hand")
 
         val order = state.workOrderFor(seat)!!
@@ -521,9 +507,46 @@ class ArrayWipeTest {
         assertEquals(listOf(spares, rack, disposal), circuitOf(state, pair[1]).markers, "two circuits, two Racks")
         // Interleaved at every station: the Rack is a hub, not a queue.
         repeat(2) {
-            for (station in listOf(spares, rack, disposal)) for (s in pair) state = scan(state, s, station, clock).state
+            for (card in listOf(spares, rack, disposal)) for (s in pair) state = station(state, s, card, clock).state
         }
         for (s in pair) assertTrue(circuitOf(state, s).done, "seat ${s.index} did not finish beside the other")
+    }
+
+    @Test
+    fun `the first Spares is briefed and BEGIN takes the disk and NOT THIS ONE takes nothing`() {
+        val seat = seatsOf(6).first { s -> armed().state.let { st -> st.alone(s, circuitOf(st, s).index) } }
+        var (state, clock) = ready(seat)
+        val (spares, rack) = circuitOf(state, seat).markers
+
+        // The first Spares: briefed, nothing in hand, no *no*.
+        val caught = scan(state, seat, spares, clock)
+        val answer = caught.effects.filterIsInstance<Effect.ScanAnswered>().single()
+        assertTrue(answer.circuit, "the first Spares was not briefed")
+        assertNull(answer.carrying, "the first Spares put a disk in hand before BEGIN")
+        assertNull(answer.haptic, "the first Spares said no")
+        assertNull(caught.state.diskOf(seat))
+
+        // NOT THIS ONE sends nothing: the next scan, the Rack, finds nothing to swap, and a BEGIN
+        // that arrives after it takes nothing.
+        val walkedOff = scan(caught.state, seat, rack, clock)
+        assertNull(walkedOff.state.diskOf(seat), "NOT THIS ONE took a disk")
+        val late = begin(walkedOff.state, seat, clock)
+        assertNull(late.state.diskOf(seat), "a BEGIN after another scan took the disk")
+        assertTrue(late.effects.none { it is Effect.ScanAnswered }, "a BEGIN that took nothing answered as a step")
+
+        // BEGIN on the briefed Spares takes DISK 01, and answers as a station step.
+        val again = scan(late.state, seat, spares, clock)
+        assertTrue(again.effects.filterIsInstance<Effect.ScanAnswered>().single().circuit)
+        val begun = begin(again.state, seat, clock)
+        assertEquals(DiskInHand(1, CircuitStation.Rack), begun.effects.filterIsInstance<Effect.ScanAnswered>().single().carrying)
+        assertEquals(listOf(seat, seat), begun.effects.map { (it as? Effect.ScanAnswered)?.seat ?: (it as Effect.WorkOrderIssued).seat })
+        state = begun.state
+
+        // The second Spares, after the first disk is delivered, is the scan alone (D-322).
+        for (card in circuitOf(state, seat).markers.drop(1)) state = scan(state, seat, card, clock).state
+        val second = scan(state, seat, spares, clock).effects.filterIsInstance<Effect.ScanAnswered>().single()
+        assertTrue(!second.circuit, "the second Spares was briefed again")
+        assertEquals(DiskInHand(2, CircuitStation.Rack), second.carrying)
     }
 }
 
@@ -534,10 +557,10 @@ class MemoryDumpTest {
     private fun dumpOf(state: GameState, seat: Seat): OrderEntry =
         state.workOrderFor(seat)!!.entries.first { it.work == AssignedWork.MemoryDump }
 
-    // Planted by hand (D-323 A): the mix deals none while its screens are unbuilt.
+    // The dealt line (D-325): the first seat whose Memory Dump nothing of another seat holds.
     private fun ready(): Triple<GameState, Seat, Clock> {
-        val seat = seatsOf(6).first()
-        val start = armed(seats = 6).state.withMemoryDump(seat)
+        val start = armed(seats = 6).state
+        val seat = seatsOf(6).first { start.alone(it, dumpOf(start, it).index) }
         var state = start
         val clock = Clock()
         for (b in dumpOf(state, seat).blockedBy) state = finish(state, seat, b, clock)
@@ -555,9 +578,18 @@ class MemoryDumpTest {
         val opened = assertNotNull(shown.effects.filterIsInstance<Effect.ScanAnswered>().single().opened)
         assertEquals(SubroutineKind.MemoryDump, opened.subroutine)
         val read = MemoryPattern.of(opened.parameters)
-        assertTrue(read.shown && read.length in 4..5, "the source did not show four or five elements")
-        assertEquals(read.elements, state.patternOf(seat, dump.index)!!.elements, "the house holds a different pattern")
+        assertTrue(read.shown && read.length == 4, "the source did not show four elements")
+        assertEquals((0 until 4).toList(), read.elements.sorted(), "the pattern is not the four dots, each once")
+        assertNull(state.patternOf(seat, dump.index), "the pattern was held before BEGIN (D-325)")
         assertNull(carried(shown.effects), "a pattern rode the carry: Files must never show it (F-015)")
+
+        // BEGIN: held from here, and the order says so (the row reads TO <ROOM>).
+        val begun = begin(state, seat, clock)
+        state = begun.state
+        assertEquals(read.elements, state.patternOf(seat, dump.index)!!.elements, "the house holds a different pattern")
+        val held = begun.effects.filterIsInstance<Effect.WorkOrderIssued>().single().lines[dump.index]
+        assertEquals(1, assertIs<OrderLine.Known>(held).pattern, "the order does not say the pattern is held")
+        assertTrue(begun.effects.none { it is Effect.ScanAnswered }, "BEGIN at the source answered as a scan")
 
         val asked = scan(state, seat, target, clock)
         state = asked.state
@@ -569,6 +601,49 @@ class MemoryDumpTest {
         assertEquals(true, graded.effects.filterIsInstance<Effect.SubroutineGraded>().single().accepted)
         assertTrue(dumpOf(graded.state, seat).done, "a matched pattern did not finish the line")
         assertNull(graded.state.patternOf(seat, dump.index), "the pattern outlived its hand-over")
+        val after = graded.effects.filterIsInstance<Effect.WorkOrderIssued>().single().lines[dump.index]
+        assertEquals(0, assertIs<OrderLine.Known>(after).pattern, "the order still says a pattern is held")
+    }
+
+    @Test
+    fun `NOT THIS ONE at the source holds nothing`() {
+        var (state, seat, clock) = ready()
+        val (source, target) = dumpOf(state, seat).markers
+        state = scan(state, seat, source, clock).state
+        // NOT THIS ONE sends nothing; the player walks to the target and scans it.
+        val asked = scan(state, seat, target, clock)
+        assertNull(asked.effects.filterIsInstance<Effect.ScanAnswered>().single().opened, "the target opened without BEGIN")
+        assertNull(asked.state.patternOf(seat, dumpOf(state, seat).index), "NOT THIS ONE held the pattern")
+        // A BEGIN arriving after another scan takes nothing either.
+        val late = begin(asked.state, seat, clock)
+        assertNull(late.state.patternOf(seat, dumpOf(state, seat).index), "a late BEGIN held a pattern")
+        val line = late.effects.filterIsInstance<Effect.WorkOrderIssued>().single().lines[dumpOf(state, seat).index]
+        assertEquals(0, assertIs<OrderLine.Known>(line).pattern)
+    }
+
+    @Test
+    fun `the pattern reaches no phone after the source so Files can never show it`() {
+        var (state, seat, clock) = ready()
+        val dump = dumpOf(state, seat)
+        val (source, target) = dump.markers
+        val walk = mutableListOf<Effect>()
+        for (step in listOf<(GameState) -> Reduction<GameState, Effect>>(
+            { scan(it, seat, source, clock) },
+            { begin(it, seat, clock) },
+            { scan(it, seat, target, clock) },
+        )) {
+            val r = step(state)
+            walk += deliveredTo(seat, r.effects, r.state)
+            state = r.state
+        }
+        val pattern = state.patternOf(seat, dump.index)!!.elements
+        val afterTheSource = walk.drop(walk.indexOfFirst { it is Effect.ScanAnswered } + 1)
+        for (e in afterTheSource) {
+            val text = e.toString()
+            assertTrue(e !is Effect.ScanAnswered || e.opened?.parameters?.firstOrNull() != MemoryPattern.SOURCE, "the pattern was shown again: $e")
+            assertTrue(e !is Effect.ScanAnswered || e.carrying == null, "a pattern rode the carry Files draws: $e")
+            assertTrue(!text.contains(pattern.joinToString(", ")), "the pattern reached the phone after the source: $e")
+        }
     }
 
     @Test
@@ -582,6 +657,7 @@ class MemoryDumpTest {
             "the target opened before the source was read",
         )
         state = scan(state, seat, source, clock).state
+        state = begin(state, seat, clock).state
         val pattern = state.patternOf(seat, dump.index)!!.elements
         state = scan(state, seat, target, clock).state
         val wrong = pattern.reversed()
@@ -595,8 +671,16 @@ class MemoryDumpTest {
             scan(state, seat, target, clock).effects.filterIsInstance<Effect.ScanAnswered>().single().opened,
             "the target opened again after a mismatch, without the source",
         )
-        val fresh = scan(state, seat, source, clock)
-        assertNotNull(fresh.effects.filterIsInstance<Effect.ScanAnswered>().single().opened, "the source did not show a fresh pattern")
+        // Back to the source: a fresh pattern, drawn off the new scan (D-139). Re-scanned until the
+        // draw differs from the last one, which a fresh draw does within a few scans.
+        var fresh = scan(state, seat, source, clock)
+        var shownAgain = MemoryPattern.of(fresh.effects.filterIsInstance<Effect.ScanAnswered>().single().opened!!.parameters).elements
+        var tries = 0
+        while (shownAgain == pattern && tries++ < 8) {
+            fresh = scan(fresh.state, seat, source, clock)
+            shownAgain = MemoryPattern.of(fresh.effects.filterIsInstance<Effect.ScanAnswered>().single().opened!!.parameters).elements
+        }
+        assertNotEquals(pattern, shownAgain, "the source showed the same pattern again after a mismatch")
         state = finish(fresh.state, seat, dump.index, clock)
         assertTrue(dumpOf(state, seat).done)
     }
@@ -640,9 +724,9 @@ class OrderParityTest {
     fun `a seat walks a circuit and a Memory Dump to the same delivered effects in either role`() {
         val seat = Seat(3)
         // The delivered effects are compared scan by scan below; the meter is the one difference.
-        // The Memory Dump is planted (D-323 A), by the same role-free hand in both rounds.
-        val asResident = armed(seats = 6, insiders = listOf(Seat(1))).state.withMemoryDump(seat)
-        val asInsider = armed(seats = 6, insiders = listOf(seat)).state.withMemoryDump(seat)
+        // The Memory Dump is the dealt one (D-325), drawn without the role in both rounds.
+        val asResident = armed(seats = 6, insiders = listOf(Seat(1))).state
+        val asInsider = armed(seats = 6, insiders = listOf(seat)).state
         val clockA = Clock()
         val clockB = Clock()
         var a = asResident
@@ -667,6 +751,17 @@ class OrderParityTest {
                 assertEquals(deliveredTo(seat, ra.effects, ra.state), deliveredTo(seat, rb.effects, rb.state), "a scan answered by role")
                 a = ra.state
                 b = rb.state
+                // BEGIN where the scan offered a carry (D-325): the first Spares, a source.
+                val answer = ra.effects.filterIsInstance<Effect.ScanAnswered>().single()
+                if (answer.circuit || answer.opened?.parameters?.firstOrNull() == MemoryPattern.SOURCE &&
+                    answer.opened?.subroutine == SubroutineKind.MemoryDump
+                ) {
+                    val ba = begin(a, seat, clockA)
+                    val bb = begin(b, seat, clockB)
+                    assertEquals(deliveredTo(seat, ba.effects, ba.state), deliveredTo(seat, bb.effects, bb.state), "BEGIN answered by role")
+                    a = ba.state
+                    b = bb.state
+                }
             }
             if (entry.work == AssignedWork.MemoryDump) {
                 val pattern = a.openSubroutineFor(seat)!!.expected
@@ -699,9 +794,9 @@ class WorkOrderDeterminismTest {
 
     @Test
     fun `a Memory Dump's pattern is drawn from the scan and replays from the recording`() {
-        // Planted by hand (D-323 A): the mix deals none while its screens are unbuilt.
+        // The dealt line (D-325).
         val seat = Seat(0)
-        val state = armed(seats = 6).state.withMemoryDump(seat)
+        val state = armed(seats = 6).state
         var a = state
         var b = state
         val dump = state.workOrderFor(seat)!!.entries.first { it.work == AssignedWork.MemoryDump }
@@ -711,8 +806,8 @@ class WorkOrderDeterminismTest {
             a = finish(a, seat, blocker, ca)
             b = finish(b, seat, blocker, cb)
         }
-        a = scan(a, seat, dump.markers[0], ca).state
-        b = scan(b, seat, dump.markers[0], cb).state
+        a = begin(scan(a, seat, dump.markers[0], ca).state, seat, ca).state
+        b = begin(scan(b, seat, dump.markers[0], cb).state, seat, cb).state
         assertEquals(a.patternOf(seat, dump.index)!!.elements, b.patternOf(seat, dump.index)!!.elements, "one recording showed two patterns")
     }
 }

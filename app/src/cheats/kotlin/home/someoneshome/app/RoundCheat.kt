@@ -566,7 +566,14 @@ class RoundCheat(
      */
     private fun workTheCaughtScan() {
         val actions = flow.actions()
+        // An Array Wipe's first Spares is briefed (D-325): BEGIN asks the house for the disk, and the
+        // house's answer, not this press, moves the phone to the widget.
+        val circuit = flow.state.circuit != null && flow.state.current == null
         actions.beginSubroutine()
+        if (circuit) {
+            note("BEGAN THE CIRCUIT AT SPARES — THE DISK IS THE HOUSE'S ANSWER")
+            return
+        }
         val opened = Subroutine.entries.firstOrNull { it.screen == flow.state.screen }
         if (opened == null) {
             // BEGIN moved this phone somewhere that is not a Subroutine at all. Reported rather

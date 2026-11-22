@@ -175,6 +175,18 @@ enum class Subroutine(
         "HANDSHAKE", SubroutineTier.Medium, LightSignature.Dark, SubroutineKind.Handshake,
         ScreenId.SubHandshake,
         briefing = "THE PHONE WILL BUZZ A RHYTHM.\nTAP IT BACK BY FEEL.",
+    ),
+
+    /**
+     * **The long: Replay's four dots, shown at one card and tapped back at another** (the owner
+     * approved the draft as drawn, 2026-11-22, D-325). Rated MEDIUM. Its [briefing] is the source's;
+     * the target's is [MEMORY_DUMP_TARGET_BRIEFING], chosen by the stage the house dealt
+     * ([CurrentSubroutine.briefing]).
+     */
+    MemoryDump(
+        "MEMORY DUMP", SubroutineTier.Long, LightSignature.Medium, SubroutineKind.MemoryDump,
+        ScreenId.SubMemory,
+        briefing = MEMORY_DUMP_SOURCE_BRIEFING,
     );
 
     companion object {
@@ -194,9 +206,9 @@ enum class Subroutine(
         fun of(kind: SubroutineKind): Subroutine = entries.first { it.kind == kind }
 
         /**
-         * The roster row for [kind], or **null for a kind with no row** — Memory Dump, whose screens,
-         * briefing and light are STOPPED for the owner (D-322). A caller that gets null opens
-         * nothing, which is the fail-closed direction: *it did not open*.
+         * The roster row for [kind], or **null for a kind with no row**. Every kind has one since
+         * Memory Dump's (D-325); a caller that gets null opens nothing, which is the fail-closed
+         * direction: *it did not open*.
          */
         fun ofOrNull(kind: SubroutineKind): Subroutine? = entries.firstOrNull { it.kind == kind }
 
@@ -854,6 +866,8 @@ class SubroutineModel(
      * graded REJECTED by the house. See [DriftScreen].
      */
     val drift: ChoiceEntry = ChoiceEntry(),
+    /** Memory Dump's entry at the target: Replay's sequence, four long (D-325). */
+    val memory: SequenceEntry = SequenceEntry(MemoryPattern.LENGTH),
     /**
      * **Interrupt's opening question, before the house has dealt one** — the port's fixture.
      *
@@ -953,6 +967,13 @@ class SubroutineModel(
         private set
 
     /**
+     * **Memory Dump's stage and, at the source, its pattern** (D-325). At the target it holds the
+     * length and nothing else: the pattern is in the player's head (`gdd.md:642`).
+     */
+    var dump: MemoryPattern by mutableStateOf(MEMORY_DUMP_TARGET)
+        private set
+
+    /**
      * **The house dealt this phone [parameters] as a question of [kind]** (D-238).
      *
      * Read through the `model` reader for that kind and written to the slot that kind's screen
@@ -992,9 +1013,12 @@ class SubroutineModel(
             SubroutineKind.Jam -> rings = JamRings.of(parameters)
             // Felt, not drawn, for Sniff's reason; the beat count is the number of taps owed.
             SubroutineKind.Handshake -> handshake.resize(HandshakeRhythm.of(parameters).beats)
-            // **Read and drawn nowhere** (D-322): Memory Dump's two screens are STOPPED for the
-            // owner, so a malformed pattern still opens nothing and a well-formed one has no slot.
-            SubroutineKind.MemoryDump -> MemoryPattern.of(parameters)
+            // The source's pattern to play, or the target's length to take back (D-325).
+            SubroutineKind.MemoryDump -> {
+                val read = MemoryPattern.of(parameters)
+                dump = read
+                memory.resize(read.length)
+            }
         }
     }
 
@@ -1041,6 +1065,7 @@ class SubroutineModel(
         Subroutine.Deallocate -> deallocate
         Subroutine.Interrupt -> interrupt
         Subroutine.Drift -> drift
+        Subroutine.MemoryDump -> memory
     }
 
     /**
@@ -1075,6 +1100,8 @@ class SubroutineModel(
             Subroutine.Deallocate -> deallocate.remove(at)
             Subroutine.Interrupt -> interrupt.enter(at)
             Subroutine.Drift -> drift.choose(at)
+            // The target's dots only: the source plays the pattern and takes nothing (D-325).
+            Subroutine.MemoryDump -> if (!dump.shown) memory.enter(at)
         }
         // **The three sequences hand themselves over on their last element**, so for them the tap
         // IS the hand-over and there is no button to hang the send off. Called unconditionally
@@ -1230,11 +1257,14 @@ class SubroutineModel(
          */
         val HANDSHAKE_PARAMETERS: List<Int> = listOf(3, 3, 6, 2)
 
-        /**
-         * **A Memory Dump source, four elements** (D-322), for [benchParameters]' tests only. No
-         * screen draws it: the two Memory Dump screens are STOPPED for the owner.
-         */
+        /** **A Memory Dump source, four elements** (D-325): the bench's pattern, the draft's. */
         val MEMORY_DUMP_PARAMETERS: List<Int> = listOf(MemoryPattern.SOURCE, 2, 0, 3, 1)
+
+        /**
+         * **The bench's Memory Dump: the target, four to tap** (D-325). A phone with no house draws
+         * the entry, the half that takes input, so every guard that taps every screen reaches it.
+         */
+        val MEMORY_DUMP_TARGET: MemoryPattern = MemoryPattern.of(listOf(MemoryPattern.TARGET, MemoryPattern.LENGTH))
 
         /** The rhythm, read once. */
         val HANDSHAKE: HandshakeRhythm = HandshakeRhythm.of(HANDSHAKE_PARAMETERS)
@@ -1440,6 +1470,9 @@ class SubroutineModel(
             deallocate.remove(0)
             interrupt.enter(InterruptSweep.SPAN / 3)
             drift.choose(DriftPath.SPAN / 2)
+            // Two dots of the Memory Dump's four tapped back at the target (D-325), the draft's.
+            memory.enter(2)
+            memory.enter(0)
             val wiring = TRACE
             trace.walk(wiring.source)
             wiring.joinedTo(wiring.source).firstOrNull()?.let { trace.walk(it) }
@@ -1475,3 +1508,23 @@ private val unhandedOrigin = TimeSource.Monotonic.markNow()
 
 /** The standard library's monotonic clock, in milliseconds, for a [SubroutineModel] handed none. */
 private fun unhandedMillis(): Long = unhandedOrigin.elapsedNow().inWholeMilliseconds
+
+// ---- Memory Dump's words, as the owner approved them (the draft, 2026-11-22, D-325) ------------
+
+/** The briefing at the source card. */
+const val MEMORY_DUMP_SOURCE_BRIEFING: String = "DOTS WILL FLASH IN ORDER.\nCARRY THE ORDER IN YOUR HEAD."
+
+/** The briefing at the target card. */
+const val MEMORY_DUMP_TARGET_BRIEFING: String = "THE DOTS WILL NOT FLASH.\nTAP THEM BACK FROM MEMORY."
+
+/** Where to take the pattern: the carry screen's line and the order row's while it is held. */
+fun memoryDumpTo(room: String): String = "TO $room"
+
+/** A mismatch, which sends the player back to the source (`gdd.md:644`). */
+fun memoryDumpRejected(sourceRoom: String): String = "REJECTED . BACK TO $sourceRoom"
+
+/**
+ * **The Array Wipe's briefing at its first Spares** (the owner's 2026-11-22 ruling, D-325; D-188:
+ * every Subroutine is briefed before it opens). BEGIN takes the first disk.
+ */
+const val ARRAY_WIPE_BRIEFING: String = "CARRY ONE DISK AT A TIME.\nNOTHING ELSE OPENS UNTIL IT IS DELIVERED."

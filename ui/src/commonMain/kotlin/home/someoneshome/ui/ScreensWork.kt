@@ -462,6 +462,14 @@ fun ScanCaughtScreen(vals: PanelVals) {
     // them neither, and did it with exactly the confidence it shows a real one. What an unanswered
     // scan draws now is the shape of nothing: no glyph, no room, no briefing, and no BEGIN.
     val current = vals.current
+    // **What was caught, as this screen draws it**: a Subroutine's row, or an Array Wipe's first
+    // Spares (D-325), whose light and briefing are the circuit's. The same layout for both.
+    val circuit = vals.circuit.takeIf { current == null }
+    val marker = current?.marker ?: circuit?.marker
+    val room = current?.room ?: circuit?.room
+    val counted = current?.let { it.index to it.total } ?: circuit?.let { it.index to it.total }
+    val light = current?.light ?: circuit?.let { PanelVals.ARRAY_WIPE_LIGHT }
+    val briefing = current?.briefing ?: circuit?.let { ARRAY_WIPE_BRIEFING }
     KitScreen {
         KitHeader("CAUGHT", p)
 
@@ -469,7 +477,7 @@ fun ScanCaughtScreen(vals: PanelVals) {
             // The marker you just scanned -- the same shape the work order sent you to. Filled, as
             // every marker in the app is (see [MarkerGlyph]): the mockup's 88 box, holding the
             // shape at the 10/16 of it the mockup's shapes fill.
-            current?.marker?.let {
+            marker?.let {
                 Box(Modifier.size(88.dp), contentAlignment = Alignment.Center) {
                     MarkerGlyph(it, 55.dp, Ramp.Ink)
                 }
@@ -491,7 +499,7 @@ fun ScanCaughtScreen(vals: PanelVals) {
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                current?.room?.let {
+                room?.let {
                     Words(
                         it, Modifier.fillMaxWidth(),
                         size = 26, color = Ramp.Mid, lineHeight = 1.0, align = TextAlign.Center,
@@ -502,14 +510,14 @@ fun ScanCaughtScreen(vals: PanelVals) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Words(
-                        current?.let { "SUBROUTINE ${it.index} OF ${it.total}" } ?: PanelVals.NOTHING_OPEN,
+                        counted?.let { "SUBROUTINE ${it.first} OF ${it.second}" } ?: PanelVals.NOTHING_OPEN,
                         Modifier.weight(1f, fill = false),
                         size = 26, color = Ramp.Mid, lineHeight = 1.0, align = TextAlign.Center,
                     )
                     // The fourth surface, and the one D-106 does not name. It is here because BEGIN
                     // and NOT THIS ONE are both live below: this is the last moment the choice is
                     // still a choice. Flagged for review. Absent where there is no Subroutine.
-                    current?.let { WorkMark(it.light, Ramp.Mid) }
+                    light?.let { WorkMark(it, Ramp.Mid) }
                 }
             }
             // The line under it -- THE CARD IN YOUR HAND MATCHES, or WAITING FOR THE HOUSE -- went
@@ -524,7 +532,7 @@ fun ScanCaughtScreen(vals: PanelVals) {
         // Above BEGIN rather than beside it, so it is read on the way to the control rather than
         // discovered under a thumb. Not nullable: [Subroutine.briefing] is total over the roster,
         // so a Subroutine cannot reach a player with nothing said about it.
-        current?.let {
+        briefing?.let {
             Box(
                 Modifier.fillMaxWidth()
                     .edgeLine(PanelSide.Top, Ramp.Faint, 1.dp)
@@ -533,7 +541,7 @@ fun ScanCaughtScreen(vals: PanelVals) {
                 contentAlignment = Alignment.Center,
             ) {
                 Words(
-                    it.subroutine.briefing, Modifier.fillMaxWidth(),
+                    it, Modifier.fillMaxWidth(),
                     size = 24, color = p.ink, lineHeight = 1.15, align = TextAlign.Center,
                 )
             }
@@ -548,7 +556,7 @@ fun ScanCaughtScreen(vals: PanelVals) {
         // became unreachable: the press defaulted to the port's fixture and opened a Handshake over
         // whatever the house had actually dealt. This screen's other button still goes back — the
         // player is never stuck here.
-        if (current != null) {
+        if (current != null || circuit != null) {
             KitPrimary("BEGIN", p, size = 32, onClick = actions.beginSubroutine)
         }
         KitQuiet("NOT THIS ONE", p) { go(ScreenId.Work) }

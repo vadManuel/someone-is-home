@@ -174,6 +174,9 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
             // idea of where the work is, and would keep agreeing after the draw moved.
             val marker = nextCard(state, seat) ?: MARKERS[i % MARKERS.size]
             add(walk(Event.MarkerScanned(Tick(t++), seat, marker)))
+            // **BEGIN where the scan offered a carry** (D-325): a Memory Dump's source holds its
+            // pattern, and an Array Wipe's first Spares its disk, only once BEGIN is pressed.
+            if (state.offerOf(seat) != null) add(walk(Event.CarryBegun(Tick(t++), seat)))
             // **Read AFTER the scan, because the scan is what draws it** (D-139, D-140). The
             // question and its answer are a property of the instance the scan opened, re-drawn on
             // every re-scan; a fixture that read the order's own row would hand over the answer to

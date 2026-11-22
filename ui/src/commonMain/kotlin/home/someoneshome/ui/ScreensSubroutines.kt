@@ -1,5 +1,7 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.MarkerShape
+import home.someoneshome.model.MemoryPattern
 import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -200,26 +202,10 @@ fun ReplayScreen(verdict: SubroutineVerdict? = null) {
     // nothing left to show, so the playback stops with it rather than freezing a dot lit.
     val flashing = if (entry.handedOver) null else replayFlashing(order, elapsed)
     SubroutineFrame(Subroutine.Replay, p, entry.handedOver, verdict) {
-        Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
-            for (pair in (0 until entry.length).chunked(2)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(64.dp)) {
-                    for (at in pair) {
-                        val touched = entry.holds(at) || at == flashing
-                        Box(
-                            Modifier.size(DOT)
-                                .background(if (touched) p.ink else Color.Transparent, CircleShape)
-                                .border(2.dp, p.ink, CircleShape)
-                                .then(
-                                    if (entry.handedOver) Modifier
-                                    else Modifier.tap {
-                                        actions.tapSubroutine(Subroutine.Replay, at)
-                                    }
-                                )
-                        )
-                    }
-                }
-            }
-        }
+        DotGrid(
+            entry.length, lit = { entry.holds(it) || it == flashing }, p,
+            onTap = if (entry.handedOver) null else { at -> actions.tapSubroutine(Subroutine.Replay, at) },
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             repeat(entry.length) { at ->
                 Cell(28.dp, 12.dp, edge = p.ink, fill = if (at < entry.entered.size) p.ink else null)
@@ -1184,6 +1170,8 @@ private fun SubroutineFrame(
     verdict: SubroutineVerdict?,
     bodyModifier: Modifier = Modifier,
     submit: (@Composable () -> Unit)? = null,
+    /** What a REJECTED says: [RESCAN] everywhere but Memory Dump's target (D-325). */
+    rejected: String = RESCAN,
     body: @Composable ColumnScope.() -> Unit,
 ) {
     KitScreen(gap = 10.dp) {
@@ -1201,7 +1189,7 @@ private fun SubroutineFrame(
             horizontalAlignment = Alignment.CenterHorizontally,
             content = body,
         )
-        ReturnLine(handedOver, verdict, p.dim)
+        ReturnLine(handedOver, verdict, p.dim, rejected)
         KitBudgetRow(p, height = 44.dp)
         submit?.invoke()
         StopNow(p)
@@ -1393,11 +1381,11 @@ private fun SubmitButton(label: String, p: Palette, enabled: Boolean, onClick: (
  * roles in all three states and compares the pixels.
  */
 @Composable
-private fun ReturnLine(handedOver: Boolean, verdict: SubroutineVerdict?, color: Color) {
+private fun ReturnLine(handedOver: Boolean, verdict: SubroutineVerdict?, color: Color, rejected: String = RESCAN) {
     Box(Modifier.fillMaxWidth().height(24.dp), contentAlignment = Alignment.Center) {
         val line = when {
             verdict == SubroutineVerdict.Accepted -> HOUSE_WEAKER
-            verdict == SubroutineVerdict.Rejected -> RESCAN
+            verdict == SubroutineVerdict.Rejected -> rejected
             handedOver -> "RETURNED . WAITING"
             else -> null
         }
@@ -1440,4 +1428,140 @@ const val RESCAN: String = "REJECTED . RESCAN THE MARKER"
 private fun StopNow(p: Palette) {
     val actions = LocalActions.current
     KitQuiet("STOP NOW", p.copy(mid = p.dim), onClick = actions.stopSubroutine)
+}
+
+// ================================================================================================
+// MEMORY DUMP (D-325): the owner's approved draft (`abac9b9`), built into the shipping frame.
+// ================================================================================================
+
+/**
+ * **How many times the source plays the pattern** (D-325): Replay's own schedule
+ * ([REPLAY_LEAD_MILLIS], [REPLAY_LIT_MILLIS], [REPLAY_STEP_MILLIS]), twice.
+ */
+internal const val MEMORY_DUMP_PASSES: Int = 2
+
+/** How long the source shows [order]: 8.8 s at four dots — 800 ms still, then 600 ms lit on a 900 ms step, twice. */
+internal fun memoryDumpShownMillis(order: List<Int>): Long = replayPlayedMillis(order) * MEMORY_DUMP_PASSES
+
+/**
+ * **The dot the source has lit [elapsed] ms in, or null** (D-325): Replay's playback, played
+ * [MEMORY_DUMP_PASSES] times, and nothing lit after it. A pure function of the house's pattern and
+ * the screen's own clock, for [replayFlashing]'s reason.
+ */
+internal fun memoryDumpFlashing(order: List<Int>, elapsed: Long): Int? {
+    val pass = replayPlayedMillis(order)
+    if (elapsed >= pass * MEMORY_DUMP_PASSES) return null
+    return replayFlashing(order, elapsed % pass)
+}
+
+/** **The light Memory Dump stands in: MEDIUM**, the rung's palette, as Drift's and Jam's (D-325). */
+private val MEMORY_DUMP_PALETTE: Palette get() = Palette.MEDIUM
+
+/**
+ * **The two rooms a Memory Dump's screen names, and the target's glyph** (D-325) — narrowed off
+ * [CurrentSubroutine], so the screen is handed these three and nothing else about the phone.
+ */
+data class MemoryDumpRooms(val source: String?, val target: String?, val targetMarker: MarkerShape?) {
+    companion object {
+        fun of(current: CurrentSubroutine): MemoryDumpRooms =
+            MemoryDumpRooms(current.sourceRoom, current.targetRoom, current.targetMarker)
+    }
+}
+
+/**
+ * **MEMORY DUMP — four of Replay's dots, shown at one card and tapped back at another** (the
+ * owner approved the draft as drawn, 2026-11-22, D-325).
+ *
+ * **At the source** the dots flash the house's pattern on Replay's schedule, twice
+ * ([memoryDumpShownMillis], about 8.8 s), and take no taps; then the dots are gone and the screen
+ * names where the pattern goes: the target's glyph and TO <ROOM>. **At the target** it is Replay's
+ * input exactly: a tapped dot stays lit, the cells count, the last tap hands it over and the line
+ * reads RETURNED . WAITING; ACCEPTED is the usual THE HOUSE GROWS WEAKER and a mismatch REJECTED .
+ * BACK TO <SOURCE>. STOP NOW is the one exit, as everywhere.
+ *
+ * The pattern is never kept anywhere but [SubroutineModel.dump] while the screen plays it; the
+ * phone's Files never holds it (F-015). No role reaches this function.
+ */
+@Composable
+fun MemoryDumpScreen(verdict: SubroutineVerdict? = null, rooms: MemoryDumpRooms? = null) {
+    val model = LocalSubroutine.current
+    val dump = model.dump
+    val until = if (dump.shown) memoryDumpShownMillis(dump.elements) else 0L
+    val elapsed = screenMillis(running = dump.shown, instance = model.instance, until = until)
+    MemoryDumpBody(dump, model.memory, elapsed, verdict, rooms)
+}
+
+/**
+ * The screen at [elapsed] ms, stateless: [MemoryDumpScreen]'s whole picture, and what the render
+ * harness draws at a chosen moment of the playback.
+ */
+@Composable
+internal fun MemoryDumpBody(
+    dump: MemoryPattern,
+    entry: SequenceEntry,
+    elapsed: Long,
+    verdict: SubroutineVerdict?,
+    rooms: MemoryDumpRooms?,
+) {
+    val actions = LocalActions.current
+    val p = MEMORY_DUMP_PALETTE
+    if (dump.shown) {
+        val playing = elapsed < memoryDumpShownMillis(dump.elements)
+        val flashing = memoryDumpFlashing(dump.elements, elapsed)
+        SubroutineFrame(Subroutine.MemoryDump, p, handedOver = false, verdict = null) {
+            if (playing) {
+                DotGrid(dump.length, lit = { it == flashing }, p, onTap = null)
+            } else {
+                // Screen 3: where the pattern goes. The glyph and the room, the draft's sizes.
+                rooms?.targetMarker?.let {
+                    Box(Modifier.size(88.dp), contentAlignment = Alignment.Center) {
+                        MarkerGlyph(it, 55.dp, p.ink)
+                    }
+                }
+                rooms?.target?.let {
+                    Words(
+                        memoryDumpTo(it), size = 40, color = p.ink, lineHeight = 1.0,
+                        align = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                }
+            }
+        }
+    } else {
+        SubroutineFrame(
+            Subroutine.MemoryDump, p, entry.handedOver, verdict,
+            rejected = rooms?.source?.let { memoryDumpRejected(it) } ?: RESCAN,
+        ) {
+            DotGrid(
+                entry.length, lit = { entry.holds(it) }, p,
+                onTap = if (entry.handedOver) null else { at -> actions.tapSubroutine(Subroutine.MemoryDump, at) },
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                repeat(entry.length) { at ->
+                    Cell(28.dp, 12.dp, edge = p.ink, fill = if (at < entry.entered.size) p.ink else null)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * **Replay's dots, at Replay's size, in Replay's two columns** — drawn by Replay and by Memory Dump
+ * (D-325), the one grid the approved draft copied. [onTap] null is a grid that takes no taps.
+ */
+@Composable
+private fun DotGrid(count: Int, lit: (Int) -> Boolean, p: Palette, onTap: ((Int) -> Unit)?) {
+    Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
+        for (pair in (0 until count).chunked(2)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(64.dp)) {
+                for (at in pair) {
+                    Box(
+                        Modifier.size(DOT)
+                            .background(if (lit(at)) p.ink else Color.Transparent, CircleShape)
+                            .border(2.dp, p.ink, CircleShape)
+                            .then(if (onTap == null) Modifier else Modifier.tap { onTap(at) })
+                    )
+                }
+            }
+        }
+    }
 }

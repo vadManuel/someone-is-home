@@ -753,7 +753,7 @@ class HouseBuzzTest {
             "Drift did not buzz its now-pulse",
         )
 
-        // Memory Dump has no screen to stand on (D-322, STOPPED); its script is asserted null below.
+        // Memory Dump is looked at, not felt (D-325): its script is asserted null below.
         val quiet = SubroutineKind.entries -
             setOf(SubroutineKind.Handshake, SubroutineKind.Sniff, SubroutineKind.Drift, SubroutineKind.MemoryDump)
         assertEquals(

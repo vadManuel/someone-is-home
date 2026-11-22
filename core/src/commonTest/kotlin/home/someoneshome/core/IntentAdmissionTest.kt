@@ -54,6 +54,7 @@ class IntentAdmissionTest {
         Intent.FireIsolate(Seat(1), marker),
         Intent.FireStatic(Seat(1)),
         Intent.StopSubroutine(Seat(2)),
+        Intent.BeginCarry(Seat(2)),
         Intent.LeaveTerminal(Seat(2)),
         Intent.PlayTimelapse(Seat(2)),
         Intent.StopTimelapse(Seat(2)),
@@ -237,7 +238,7 @@ class IntentAdmissionTest {
         // the actor and the taps the finger made, and neither needs a draw or a token resolved. The
         // gap was a missing member, never a missing argument — which is why moving them here costs
         // nothing but the members themselves.
-        is Event.PerformanceEnded, is Event.SyncPulseReturned -> Origin.Requestable
+        is Event.PerformanceEnded, is Event.CarryBegun, is Event.SyncPulseReturned -> Origin.Requestable
 
         // **The live view closing, and it is requestable for STOP NOW's reason** (D-203): the
         // actor and nothing else. The host also composes it for a dropped connection, and that is
@@ -261,6 +262,7 @@ class IntentAdmissionTest {
         Event.MarkerScanned(at, Seat(2), marker),
         Event.SubroutineReturned(at, Seat(2), marker, listOf(1)),
         Event.PerformanceEnded(at, Seat(2)),
+        Event.CarryBegun(at, Seat(2)),
         Event.TerminalLeft(at, Seat(2)),
         Event.TimelapsePlayed(at, Seat(2)),
         Event.TimelapseStopped(at, Seat(2)),
@@ -358,6 +360,7 @@ class IntentAdmissionTest {
         is Intent.FireIsolate -> intent.copy(actor = actor)
         is Intent.FireStatic -> intent.copy(actor = actor)
         is Intent.StopSubroutine -> intent.copy(actor = actor)
+        is Intent.BeginCarry -> intent.copy(actor = actor)
         is Intent.LeaveTerminal -> intent.copy(actor = actor)
         is Intent.PlayTimelapse -> intent.copy(actor = actor)
         is Intent.StopTimelapse -> intent.copy(actor = actor)

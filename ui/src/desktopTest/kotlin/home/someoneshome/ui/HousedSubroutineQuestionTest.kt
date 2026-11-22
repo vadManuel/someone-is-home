@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Destination
+import home.someoneshome.model.MemoryPattern
 import home.someoneshome.model.DotColumns
 import home.someoneshome.model.DriftPath
 import home.someoneshome.model.HandshakeRhythm
@@ -67,6 +68,8 @@ class HousedSubroutineQuestionTest {
         SubroutineKind.SignalTrace to listOf(267),
         SubroutineKind.Jam to listOf(9),
         SubroutineKind.Handshake to listOf(5, 5, 6),
+        // A source (D-325): the pattern the screen plays, four places in four.
+        SubroutineKind.MemoryDump to listOf(MemoryPattern.SOURCE, 1, 3, 0, 2),
     )
 
     /** A housed phone whose house has issued one line of [kind] at [card] and answered its scan. */
@@ -109,8 +112,8 @@ class HousedSubroutineQuestionTest {
         SubroutineKind.SignalTrace -> model.wiring.let { listOf(it.nodes, it.edges, it.source, it.sink) }
         SubroutineKind.Jam -> model.rings.opening
         SubroutineKind.Handshake -> model.handshake.length
-        // No screen draws a Memory Dump: its two screens are STOPPED for the owner (D-322).
-        SubroutineKind.MemoryDump -> Unit
+        // The stage and, at the source, the pattern the screen plays (D-325).
+        SubroutineKind.MemoryDump -> model.dump.let { listOf(it.shown, it.elements, it.length) }
     }
 
     /** The same projection, read straight off the reader the house drew against. */
@@ -125,7 +128,7 @@ class HousedSubroutineQuestionTest {
         SubroutineKind.SignalTrace -> SignalGraph.of(p).let { listOf(it.nodes, it.edges, it.source, it.sink) }
         SubroutineKind.Jam -> JamRings.of(p).opening
         SubroutineKind.Handshake -> HandshakeRhythm.of(p).beats
-        SubroutineKind.MemoryDump -> Unit
+        SubroutineKind.MemoryDump -> MemoryPattern.of(p).let { listOf(it.shown, it.elements, it.length) }
     }
 
     private fun render(state: PanelState, model: SubroutineModel, atMillis: Long = 0): BufferedImage {
@@ -151,10 +154,8 @@ class HousedSubroutineQuestionTest {
     /** **GUARD: on a housed phone, BEGIN deals the house's parameters into the model the screen reads.** */
     @Test
     fun aHousedPhoneHoldsTheQuestionTheHouseDealt() {
-        // ⚠️ Every kind but Memory Dump, whose two screens are STOPPED for the owner (D-322): it has
-        // no roster row, so a phone opens nothing over it, and that is asserted rather than skipped.
-        assertEquals(SubroutineKind.entries.toSet() - SubroutineKind.MemoryDump, dealt.keys, "a kind has no dealt question here")
-        assertEquals(null, Subroutine.ofOrNull(SubroutineKind.MemoryDump), "Memory Dump grew a screen: give it a dealt question here")
+        // Every kind, Memory Dump's source included since D-325.
+        assertEquals(SubroutineKind.entries.toSet(), dealt.keys, "a kind has no dealt question here")
         for ((kind, parameters) in dealt) {
             val phone = housedAndDealt(kind, parameters)
             val subroutine = Subroutine.of(kind)

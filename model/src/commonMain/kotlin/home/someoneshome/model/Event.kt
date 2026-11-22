@@ -260,6 +260,15 @@ sealed interface Event {
     data class PerformanceEnded(override val at: Tick, val actor: Seat) : Event
 
     /**
+     * **BEGIN was pressed on a caught scan that offered something to carry** (D-325): the house
+     * takes what its answer to this seat's last scan offered ([Carry.Offered]) into the seat's
+     * hands — a Memory Dump's pattern, held from now and not from the scan, or an Array Wipe's
+     * first disk. NOT THIS ONE sends nothing, so it holds nothing. The actor alone, for
+     * [PerformanceEnded]'s reason.
+     */
+    data class CarryBegun(override val at: Tick, val actor: Seat) : Event
+
+    /**
      * **The reader is no longer reading the Terminal** (D-199, D-203).
      *
      * One event for every way a reading ends, and **it carries no reason**, for [PerformanceEnded]'s

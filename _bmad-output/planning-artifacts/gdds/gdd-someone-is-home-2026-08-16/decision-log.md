@@ -14256,7 +14256,7 @@ cycle's order, every Insider's lock a fake hold), so a version 50 round replays 
 **Guards.** `CrossPlayerChainTest` (core, rewritten): *every real chain links two plain Residents and no
 Insider is ever upstream* (seeds 1–30 at five to twelve seats, the Insiders as `insidersFor` draws them:
 every real link Resident to Resident, every Resident upstream once and downstream once, no link of any
-kind with an Insider upstream, every fake on an Insider); *the length bound holds, and a round with no
+kind with an Insider upstream, every fake on an Insider); *the length bound holds and a round with no
 Insider draws no chain* (every chain, followed release by release, within `chainBound`); *an Insider's
 order is locked in the same number and at the same place a Resident's would be* (seed 1–30, seat 4 as a
 Resident and as one of one or two Insiders: the same locked line, the same delay, one lock, and the
@@ -14299,6 +14299,185 @@ on D-325's final tree (D-325, *Checked*). **Nothing here has run on a phone.**
 | `app` `HouseBuzzer.kt` | `you're up` silent | the message's buzz |
 | `harness` `Transcript.kt`, `Recording.kt` | 50 | 51 |
 | `ui` `Flow.kt` | `UpstreamWaiting` no-op | deleted |
+
+### D-325 · **Memory Dump's screens, built from the owner's approved draft, and dealt; the Array Wipe is briefed at its first Spares; BEGIN takes what a scan offered — built (recording 52)**
+
+**The rulings** (owner, 2026-11-22). The draft on `worktree-agent-aa216d461ba48ec5f` (`abac9b9`,
+`MemoryDumpDraft.kt` and `MemoryDumpDraftRender.kt`) is **approved as drawn**: the element is Replay's
+dot in a 2×2 grid; the pattern is **fixed at four**; the source plays Replay's schedule **twice**
+(800 ms still, then each dot lit 600 ms on a 900 ms step, about 8.8 s), then shows the target's glyph
+and TO <ROOM>; the entry is Replay's tap input, the last tap hands it over, then RETURNED . WAITING;
+ACCEPTED shows THE HOUSE GROWS WEAKER and a mismatch REJECTED . BACK TO <SOURCE ROOM>; the light is
+**MEDIUM**; the briefings are *DOTS WILL FLASH IN ORDER. / CARRY THE ORDER IN YOUR HEAD.* (source) and
+*THE DOTS WILL NOT FLASH. / TAP THEM BACK FROM MEMORY.* (target). Then **switch it on**. And, the same
+day: **the Array Wipe is briefed at the Spares card** (D-188), verbatim *CARRY ONE DISK AT A TIME. /
+NOTHING ELSE OPENS UNTIL IT IS DELIVERED.*, on the first scan of Spares for that circuit; BEGIN takes the
+disk and NOT THIS ONE takes nothing; everything else about the circuit stays as D-322 built it.
+
+**The calls recorded here, provisional** (the coordinator's, 2026-11-22, with the approval):
+
+- **The pattern is held only once BEGIN starts the playback.** NOT THIS ONE at the source holds nothing.
+  This changes D-322's *held from the source scan*.
+- **The house tells the phone the pattern is held**, so the work-order row reads TO <ROOM> with the
+  target's glyph and the MEDIUM mark, by the smallest same-width wire addition.
+
+**1 · BEGIN takes what a scan offered (`Intent.BeginCarry`, `Event.CarryBegun`).** A source scan still
+draws a fresh pattern off its own minted id and shows it in the answer (`[SOURCE, e₁…e₄]`), and the
+first Spares answers with the circuit's briefing (`ScanAnswered.circuit`); neither puts anything in the
+seat's hands. The house keeps what it showed as an **offer** (`Carry.Offered`, one per seat, in
+`carries`, so `GameState` gained no field): it is not a disk and not a pattern, so it blocks no scan,
+opens no target and is in no Files. **The seat's next scan of any card, the T card included, replaces or
+drops it.** BEGIN on the caught scan sends `IntentMessage.BeginCarry`, a `data object` like STOP NOW
+(the actor alone: the house knows what its own answer offered), which becomes `Event.CarryBegun`, and
+the rules (`carryBegun`) move the offer into the seat's hands: the pattern, which the target now opens
+against, or DISK 01. **The answer is the order every time**, constructed once (the row reading TO
+<ROOM> is how the phone learns the pattern is held, and a BEGIN that took nothing answers with the
+same order); **a disk taken also answers as a station step** (`ScanAnswered` with the disk in hand),
+which is what moves the phone to the widget as D-322 built. Which of the two was offered is the seat's
+own scan, already answered to it; no role is read. NOT THIS ONE sends nothing and so holds nothing,
+and a BEGIN that arrives after another scan takes nothing. An out seat takes nothing. The admission
+gate treats `CarryBegun` as it treats `PerformanceEnded` (requestable, not refused at a meeting).
+Every later Spares (the second disk) steps as D-322 built it, unbriefed.
+
+**2 · The held row (`OrderLine.Known.pattern`).** One digit on every known line, 1 while the house holds
+that Memory Dump line's pattern and 0 otherwise, **always encoded** (`@EncodeDefault`), so an order is
+the same width whether or not a pattern is held; it never carries the pattern. It rides
+`WorkOrderIssued`, whose schema row (the seat, the living classes) is unchanged; every client order is
+now built by one function, `GameState.orderLinesFor`, so no producer can forget it. The phone draws the
+held row as MEMORY DUMP · TO <ROOM> · the target's glyph · MEDIUM. `ScanAnswered.circuit` is one digit
+the same way.
+
+**3 · The pattern is four** (`MemoryPattern.LENGTH`; `LEAST`/`MOST` are gone). Four distinct places in
+four, the draw a shuffle off the scan's minted id with no length draw first (`patternFor`,
+`drawParameters`), so the house's draw and the sweep's read stay one stream.
+
+**4 · The screens** (`ui`), the draft built into the shipping code rather than copied beside it. The
+draft's copies of the private layouts are not used: the screen lives in `ScreensSubroutines.kt`, where
+`SubroutineFrame`, `ReturnLine`, `StopNow`, `Cell`, `DOT` and Replay's schedule already are, and
+Replay's dot grid is now one function both screens draw (`DotGrid`, Replay's pixels unchanged).
+
+- **The roster**: `Subroutine.MemoryDump`, MEMORY DUMP, the long, **MEDIUM**, `ScreenId.SubMemory`, its
+  briefing the source's; `CurrentSubroutine.briefing` gives the target's at the target. Every kind now
+  has a roster row (`Subroutine.ofOrNull` no longer returns null).
+- **The caught scan** names the card just read: the source's room and glyph at the source, the
+  target's at the target. The Array Wipe's first Spares uses the same screen (`PanelState.circuit`,
+  `CaughtCircuit`): STUDY, SUBROUTINE n OF m, the BRIGHT mark, the briefing, BEGIN, NOT THIS ONE.
+- **`MemoryDumpScreen`**, one screen whose stage is the house's dealt question, as Replay's dots are. At
+  the source: the four dots flash `memoryDumpFlashing` (Replay's `replayFlashing`, twice,
+  `memoryDumpShownMillis` = 8,800 ms at four) and take no taps; after it the dots are gone and the
+  screen shows the target's glyph and TO <ROOM> (screen 3). At the target: Replay's dots and cells, the
+  last tap hands it over (`SequenceEntry`), RETURNED . WAITING, then THE HOUSE GROWS WEAKER or REJECTED .
+  BACK TO <SOURCE ROOM> (`SubroutineFrame`'s new `rejected`, which every other Subroutine leaves at
+  REJECTED . RESCAN THE MARKER). STOP NOW is the one exit, to the order. The screen is handed the
+  verdict and `MemoryDumpRooms` (its own line's two rooms and the target's glyph), never `PanelVals`.
+- **Landing**, as the draft's report lists it: the source briefing's BEGIN goes to the pattern and
+  sends `BeginCarry`, NOT THIS ONE goes to the order; the pattern walks on to screen 3 by itself; STOP
+  NOW goes to the order; the target briefing's BEGIN goes to the entry (and sends nothing); after
+  ACCEPTED or REJECTED, STOP NOW goes to the order. The circuit's BEGIN sends `BeginCarry` and moves
+  nothing; the house's answer lands the phone on page 1 as every station step does.
+- **Buzzes** follow D-320 with no new code: ACCEPTED Short, REJECTED Double, off `SubroutineGraded`.
+  Memory Dump plays no script (`HouseBuzzer`'s `script()` is null for it). The game makes no sound.
+- **The words** are named constants in `Subroutines.kt`: `MEMORY_DUMP_SOURCE_BRIEFING`,
+  `MEMORY_DUMP_TARGET_BRIEFING`, `memoryDumpTo`, `memoryDumpRejected`, `ARRAY_WIPE_BRIEFING`. No other
+  copy, light or timing was added. ⚠️ At 720 points the circuit's second line wraps: NOTHING ELSE OPENS
+  UNTIL IT IS / DELIVERED. (the words are the owner's, verbatim).
+- **The bench's Memory Dump is the target** (`SubroutineModel.MEMORY_DUMP_TARGET`), so a phone with no
+  house draws the half that takes input and every guard that taps every screen reaches it.
+
+**5 · Switched on.** `Balance.MEMORY_DUMP_DEALT` is true, so `orderMix` is `designMix` for every `K` and
+every order holds the design's long (one at every `K` a lobby computes), the Insider's fake included.
+D-322's *What this does to a real round until Memory Dump's screens land* no longer applies: every line
+of every order is one a phone can finish.
+
+**6 · The recording: 51 → 52.** Memory Dump is dealt, so the same seed draws a long into every order
+again, and its pattern is drawn without a length draw; one event a 51 build cannot construct,
+`CarryBegun`; `ScanAnswered` gains `circuit=`; the state row's `carries=` gains `:offered:` entries.
+
+**Guards.** Core (`WorkOrderStructureTest`): `OrderMixTest` *the design's mix is dealt with a Memory Dump in
+every order* (replacing D-323's *no dealt order holds a Memory Dump*: the switch is true, `orderMix` is
+`designMix` for every `K` to 60, and every order of five to eighteen seats over four seeds, the
+Insiders' included, holds the mix's Memory Dumps at two cards); `MemoryDumpTest` *the source shows the
+pattern and the target takes it back* (four elements, the four places once each, **nothing held until
+BEGIN**, held after, the order's digit 1, the target asks only the length, accepted, the digit back to
+0), *NOT THIS ONE at the source holds nothing* (the target then opens nothing, and a BEGIN after
+another scan holds nothing), *the pattern reaches no phone after the source so Files can never show it*
+(every effect delivered to the seat after the source's answer: no source instance again, no carried
+disk, and the pattern's elements in none), *a mismatch says only mismatch and sends the player back to
+the source* (now asserting the source then shows a **different** pattern); `ArrayWipeTest` *the first
+Spares is briefed and BEGIN takes the disk and NOT THIS ONE takes nothing* (briefed with no disk and no
+*no*; the Rack after it finds nothing; a late BEGIN takes nothing; BEGIN takes DISK 01 · TO RACK with
+the step's answer; the second Spares is unbriefed and gives DISK 02). The other D-322 tests walk the
+circuit and the Memory Dump through BEGIN, and `OrderParityTest` compares BEGIN's delivered effects by
+role too. App: `SubroutineQuestionWiringTest` **aMemoryDumpIsPlayedEndToEndOverTheSockets**: on the
+phones' own `FlowModel`s through real `LobbyOverTransport`s and `RoundClient`s, for a Resident and for
+an Insider: NOT THIS ONE at the source, then the target opens nothing; source, BEGIN, the playback,
+the order reading TO <ROOM>, STOP NOW, target, BEGIN, the pattern tapped **reversed**: REJECTED, the
+pattern let go, the target shut again; then source (a fresh pattern), BEGIN, target, the pattern the
+phone's screen played: ACCEPTED, the line struck off on the phone, the meter down one for the Resident
+and unmoved for the Insider. `StructuredWorkBenchTest` *everyOrderOnTheBenchHoldsAMemoryDump* (replacing
+D-323's), and its Array Wipe walk is briefed at the first Spares (ScanCaught, no disk, BEGIN, DISK 01).
+UI: `MemoryDumpFlowTest` (seven, both roles: BEGIN at the source sends `BeginCarry` and opens the
+playback; NOT THIS ONE sends nothing; the target is briefed with its own line and room and the last tap
+hands over the order; the row reads TO HALL while held and is MEDIUM; **Files never shows the
+pattern**; the first Spares is briefed and BEGIN asks for the disk, landing on page 1 with DISK 01 at the
+house's answer; NOT THIS ONE at Spares takes nothing); `MemoryDumpRender` *theScheduleIsReplaysPlayedTwice*
+(8,800 ms; nothing lit in the 800 ms still; lit for 600 ms; the second pass flashes the same order;
+nothing lit after) and *renderEveryScreenForBothRoles* (below). Moved with the change: `SubroutineRosterTest`
+(every kind has a row), `SubroutineTest` (the design's ten and the long beside them, MEDIUM),
+`HousedSubroutineQuestionTest` (a dealt source), `LightSignatureTest` (`SubMemory` shows MEDIUM),
+`FlowTest` (STOP NOW's edge off `SubMemory`), `SubroutineParityTest` (all three states, both roles,
+through the bench's target), `IntentWireTest`, `RequestSlotTest`, `IntentAdmissionTest` (the new intent
+and event), the harness fixture (BEGIN after a scan that offered), `VerdictBuzzTest` (it picks a
+Subroutine of one card, since a source opens no window), the rehearsal's bench (`RoundCheat`: BEGIN at
+a briefed Spares and the house's answer moves the phone), the five recording tests (52).
+
+**Proved red by injection.** The phone put the source's pattern in its hands where Files reads it (`Flow`'s
+`ScanAnswered` branch: a Memory Dump source's elements as `Carried("PATTERN …")`), then restored.
+`MemoryDumpFlowTest` went red, quoted from the XML: *filesNeverShowsThePattern: java.lang.AssertionError:
+Files holds something while a pattern is carried expected null, but was:<Carried(item=PATTERN 2031,
+to=TARGET)>*. Restored, 7 of 7.
+
+**Rendered and looked at** (`MemoryDumpRender`, 720×1520 with the draft's camera band, through `FlowHost`
+on a housed phone fed only house messages, `ui/build/screens/memory-dump/<n>-<scene>-<role>.png`, the
+draft's numbering; every Resident's and Insider's pair `cmp`-identical). *1-brief-source*: CAUGHT, the cross glyph, BED 2, SUBROUTINE 4 OF
+8 with the MEDIUM mark, the two briefing lines between rules, BEGIN, NOT THIS ONE. *2-pattern*: MEMORY
+DUMP with the MEDIUM mark, the 2×2 dots with the top-left lit (the pattern's second dot, 1.8 s in), the
+MOTION BUDGET row, STOP NOW. *3-carry*: the dots gone, the diamond glyph and TO HALL, as the draft's
+screen 3. *4-brief-target*: the diamond, HALL, SUBROUTINE 4 OF 8, THE DOTS WILL NOT FLASH. / TAP THEM
+BACK FROM MEMORY., BEGIN. *5-entry*: two dots lit, two cells filled. *6-returned*: four lit, four cells,
+RETURNED . WAITING. *7-accepted*: THE HOUSE GROWS WEAKER. *8-mismatch*: REJECTED . BACK TO BED 2.
+*9-order-row*: REPLAY struck, JAM the current row, ARRAY WIPE · STUDY · BRIGHT, MEMORY DUMP · TO HALL ·
+the diamond · MEDIUM, two hatched LOCKED · WAITING UPSTREAM rows, HANDSHAKE, SHORT, the legend.
+*9b-order-row-before-source*: the same with MEMORY DUMP · BED 2 · the cross. *10-array-wipe-brief*:
+CAUGHT, the square-frame glyph, STUDY, SUBROUTINE 3 OF 8 with the BRIGHT mark, CARRY ONE DISK AT A
+TIME. / NOTHING ELSE OPENS UNTIL IT IS DELIVERED. (the second line wraps before DELIVERED.), BEGIN, NOT
+THIS ONE. All eleven pairs `cmp` identical. Beside the draft's PNGs the only difference is the status
+clock, `-` on a housed phone the house has not timed where the draft drew 21:07.
+
+**Checked.** On the final tree (D-324 and this entry together), `*/build/test-results`
+cleared first: `./gradlew check --continue` with the two variant sweeps excluded, then
+`:app:variantSweepRelease`, then `:app:variantSweepPlaytest`, the app's XML copied out after each,
+every result XML counted with a python glob: model 367 (JVM) + 348 (iOS Simulator); core 469 + 467;
+platform 211; harness 138; ui 825 (desktop) + 408 (iOS Simulator); cards 17; app 304 (the default
+variant), 179 (Release), 304 (Playtest). 3,554 in the default check, 0 failures, 0 errors, 0 skipped,
+in all three sweeps; `HouseGoneTest` passed in every one. The vocabulary lints, `redactionLint` and
+`boundaryCheck` ran and passed. In an earlier, partial app run `AbilityWiringTest`'s early-hold guard
+counted two frames still arriving from the arming burst ([8, 8, 6, 8] before, [8, 8, 8, 8] after) and
+passed when rerun alone and in the final sweep. The scripted rehearsal (`rehearse.sh`, five simulator
+seats, seed 20260822) played to the ending and `rehearse-check.py` read **21 PASS and no FAIL**; the
+driver noted again that the round ended on the first Egress, so its second never arrived. **Nothing
+here has run on a phone.**
+
+| site | before | after |
+|---|---|---|
+| `model` `Intent.kt`, `IntentWire.kt`, `Event.kt` | | `BeginCarry`; `CarryBegun` |
+| `model` `Carrying.kt`, `GameState.kt` | a pattern held at the scan | `Carry.Offered`; `offerOf`, `offering`, `orderLinesFor` |
+| `model` `WorkOrder.kt` | `OrderLine.Known` | + `pattern` (one digit, always encoded) |
+| `model` `Effect.kt`, `RoundWire.kt` | `ScanAnswered` | + `circuit` |
+| `model` `SubroutineQuestion.kt`, `Balance.kt` | 4 or 5; not dealt | `LENGTH` 4; dealt |
+| `core` `Rules.kt`, `Carrying.kt`, `Subroutines.kt`, `Intents.kt`, `Admission.kt` | | offers, `carryBegun`, the briefed Spares, fixed length |
+| `harness` `Transcript.kt`, `RecordingText.kt`, `Recording.kt` | 51 | 52 |
+| `ui` `Subroutines.kt`, `PanelModel.kt`, `Flow.kt`, `Screen.kt`, `ScreensSubroutines.kt`, `ScreensWork.kt` | no Memory Dump screen | the roster row, `SubMemory`, `MemoryDumpScreen`, `DotGrid`, the briefed caught scans, the held row |
 
 ### D-326 · **The NOTIFICATIONS row is gone; in the lobby a return to the foreground probes NEARBY DEVICES again; the lobby's check runs on events and the once-a-second read is gone — built (recording stays 50)**
 
