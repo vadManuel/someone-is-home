@@ -313,3 +313,10 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
   - the padlock shows for a held pattern too.
 
   Building as D-330.
+- **Merged:**
+  - **D-330** (`69a0e34`): source re-scan restarts the pattern, UNREGISTER AND PROCEED, the padlock for a held pattern.
+  - **D-329** (`d0ca2ec`): a lobby let-go asks the house first. An armed seat is kept and named at the first meeting. The phone waits up to 5 s (provisional) and never leaves without the house's answer.
+  - Recording format 54. 3,710 tests in the default check, 4,227 across the three builds, 0 failures; rehearsal 21/21.
+- **D-329's remaining narrow gap:** a guest whose socket drops and reconnects between being released and hanging up can be put back on the desk.
+- **Design mockup:** version 20 (PROCEED on PERIMETER ARMED, UNREGISTER AND PROCEED).
+- **All of the owner's questions are answered.** Nothing is open.
