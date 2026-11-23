@@ -33,15 +33,19 @@ internal sealed interface ScanStep {
 
     /**
      * D-124's NOTHING FOR YOU HERE — and, while a disk is in hand, every card but its station, and
-     * while a pattern is held, every card but its target (D-328).
+     * while a pattern is held, every card but its target and its own source (D-328, D-330).
      */
     data object Nothing : ScanStep
 
     /** A Subroutine at its card: the house draws the question and opens the screen. */
     data class Open(val entry: OrderEntry, val kind: SubroutineKind) : ScanStep
 
-    /** A Memory Dump's source: the house draws a fresh pattern and shows it (`gdd.md:642`). */
-    data class ShowPattern(val entry: OrderEntry) : ScanStep
+    /**
+     * A Memory Dump's source: the house draws a fresh pattern and shows it (`gdd.md:642`). Scanned
+     * while that line's pattern is [held], the scan lets the held one go and the fresh one differs
+     * from it (D-330).
+     */
+    data class ShowPattern(val entry: OrderEntry, val held: Carry.Pattern? = null) : ScanStep
 
     /** A Memory Dump's target, with the pattern held: the house opens the entry (`gdd.md:642`). */
     data class EnterPattern(val entry: OrderEntry, val pattern: Carry.Pattern) : ScanStep
@@ -72,13 +76,20 @@ internal sealed interface ScanStep {
  * Dump's, Spares again — is NOTHING FOR YOU HERE. The meeting card and the Terminal are not routed
  * here at all (`routeScan`, D-121, D-199), so a disk in hand never stops a meeting being called.
  *
- * ### Then a pattern held, and only at its target (D-328)
+ * ### Then a pattern held, and only at its target or its own source (D-328, D-330)
  *
  * **While a Memory Dump pattern is held, every card but its target is refused, as a disk is** (the
  * owner's 2026-11-23 ruling, replacing D-322's *a held pattern does not block other scans*): the
- * target opens the entry and every other card, the source again included, is NOTHING FOR YOU HERE
- * at the house (the phone draws it as CARRYING . GO TO <ROOM>, off the order line it already holds).
- * The meeting card and the Terminal stay allowed, for the disk's reason.
+ * target opens the entry and every other card is NOTHING FOR YOU HERE at the house (the phone draws
+ * it as CARRYING . GO TO <ROOM>, off the order line it already holds). The meeting card and the
+ * Terminal stay allowed, for the disk's reason.
+ *
+ * **One card besides the target answers: that line's own source, which restarts a forgotten
+ * pattern** (the owner's 2026-11-23 ruling, D-330, replacing D-328's *the source again included*).
+ * It is the source's step with the held pattern handed along, so the scan lets it go and the fresh
+ * draw differs from it: the briefing, then BEGIN takes the new one as D-325's BEGIN always has. It
+ * is the GDD's *failure: back to the source* without forcing a wrong entry. A card that is both (a
+ * home of one card, which no review passes) is the target.
  *
  * ### Empty-handed, the first actionable entry with a step at this card wins
  *
@@ -104,7 +115,11 @@ internal fun stepAt(state: GameState, seat: Seat, marker: MarkerId): ScanStep {
     val pattern = state.patternHeldBy(seat)
     if (pattern != null) {
         val entry = order.entries.getOrNull(pattern.entry) ?: return ScanStep.Nothing
-        return if (entry.markers.getOrNull(TARGET)?.value == marker.value) ScanStep.EnterPattern(entry, pattern) else ScanStep.Nothing
+        return when (marker.value) {
+            entry.markers.getOrNull(TARGET)?.value -> ScanStep.EnterPattern(entry, pattern)
+            entry.markers.getOrNull(SOURCE)?.value -> ScanStep.ShowPattern(entry, held = pattern)
+            else -> ScanStep.Nothing
+        }
     }
     for (entry in order.entries) {
         if (!order.isActionable(entry)) continue
@@ -130,12 +145,21 @@ internal fun stepAt(state: GameState, seat: Seat, marker: MarkerId): ScanStep {
 
 /**
  * **A Memory Dump's pattern, drawn fresh at every scan of the source** (`gdd.md:642`, D-139's
- * re-draw). Off the scan's own minted id, as every instance is, so a re-scan cannot show what the
- * last one did and a replay shows exactly what it showed. An element is one of Replay's four dots,
- * each place once, four long (D-325) — see [MemoryPattern].
+ * re-draw). Off the scan's own minted id, as every instance is, so a replay shows exactly what it
+ * showed. An element is one of Replay's four dots, each place once, four long (D-325) — see
+ * [MemoryPattern].
+ *
+ * **Unlike the pattern still held, when there is one** (D-330: the source re-scanned restarts a
+ * forgotten pattern, and *the new pattern must differ*). The same stream is shuffled again until it
+ * does, so with nothing held this is the draw it always was, and with one held the first shuffle
+ * that differs is taken: 23 of the 24 orders of four differ, so it nearly always ends at once.
  */
-internal fun patternFor(seed: Long, id: EntityId): List<Int> =
-    List(MemoryPattern.LENGTH) { it }.shuffledBy(Draw(seed, SeedPurpose.Instance, id.value))
+internal fun patternFor(seed: Long, id: EntityId, unlike: List<Int>? = null): List<Int> {
+    val draw = Draw(seed, SeedPurpose.Instance, id.value)
+    var pattern = List(MemoryPattern.LENGTH) { it }.shuffledBy(draw)
+    while (pattern == unlike) pattern = pattern.shuffledBy(draw)
+    return pattern
+}
 
 /**
  * **The target's open entry: the house's copy of the pattern is the answer** (`gdd.md:648`). The

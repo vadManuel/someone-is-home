@@ -293,7 +293,7 @@ final class HumanMockTests: XCTestCase {
 
         waitFor(app.labelled("PERMISSIONS"), "the permissions page")
         jump(app, to: "STAIRSWARN")
-        waitFor(app.labelled("UNREGISTER AND CONTINUE"), "the stairs warning")
+        waitFor(app.labelled("UNREGISTER AND PROCEED"), "the stairs warning")
 
         let hold = app.tagged("hold-block")
         waitFor(hold, "the hold block")
@@ -301,14 +301,14 @@ final class HumanMockTests: XCTestCase {
         // A press well short of the two seconds must reach nothing at all.
         hold.humanPress(forDuration: 1.0)
         XCTAssertTrue(
-            app.labelled("UNREGISTER AND CONTINUE").waitForExistence(timeout: 2),
+            app.labelled("UNREGISTER AND PROCEED").waitForExistence(timeout: 2),
             "a one-second press went through — the hold has become a tap"
         )
 
         // And the real hold must go through, leaving the screen it was holding.
         hold.humanPress(forDuration: 2.6)
         XCTAssertTrue(
-            app.labelled("UNREGISTER AND CONTINUE").waitForNonExistence(timeout: settle),
+            app.labelled("UNREGISTER AND PROCEED").waitForNonExistence(timeout: settle),
             "a two-and-a-half second hold did not confirm"
         )
     }

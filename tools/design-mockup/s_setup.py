@@ -109,7 +109,7 @@ def build():
   {body("These cards will belong to no room. Scan them again in a real room, or their subroutines are gone.", B, 24)}
   <div style="margin-top:auto;display:flex;flex-direction:column;gap:8px">
     {primary("MOVE THEM FIRST", "goMarkerSheet", B)}
-    {hold("UNREGISTER AND CONTINUE", "unreg", B, h=56, size=24)}
+    {hold("UNREGISTER AND PROCEED", "unreg", B, h=56, size=24)}
   </div>''', B, "STAIRS WARNING. Unregistering is a two-second hold (D-141) and returns to the plan.", gap=14)
 
     # MARKERS IN A ROOM

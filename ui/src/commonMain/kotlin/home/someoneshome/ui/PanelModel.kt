@@ -1126,9 +1126,11 @@ class PanelVals(
 
     /**
      * The padlock: on Files and while carrying (D-168, D-204), the two places nothing else opens.
+     * **Carrying is anything carried, a disk or a held Memory Dump pattern** (the owner's 2026-11-23
+     * ruling, D-330), by one rule ([Flow.carriesAnything]): the same icon, ink and place.
      * The lantern draws its own strip and carries none.
      */
-    val lockChip: Boolean = state.screen == ScreenId.Files || state.carrying != null
+    val lockChip: Boolean = state.screen == ScreenId.Files || Flow.carriesAnything(state.carrying, state.order)
 
     /**
      * **The render harness, and only the render harness: no house attached and no device clock**

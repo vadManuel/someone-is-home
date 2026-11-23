@@ -635,8 +635,9 @@ private fun markerScanned(state: GameState, event: Event.MarkerScanned): Reducti
     }
 
     // **What this scan offers and BEGIN would take** (D-325): a Memory Dump's source offers its
-    // pattern, and an Array Wipe's Spares offers its first disk with the circuit's briefing (the
-    // owner's 2026-11-22 ruling). Nothing is held until BEGIN; the seat's last offer is replaced by
+    // pattern (unlike the one held, when the source is re-scanned holding it, D-330), and an
+    // Array Wipe's Spares offers its first disk with the circuit's briefing (the owner's
+    // 2026-11-22 ruling). Nothing is held until BEGIN; the seat's last offer is replaced by
     // this one, or dropped, on every scan. Spares after the first disk steps as D-322 built it.
     val briefed = step is ScanStep.TakeDisk && step.entry.wiped == 0
     // What the house holds armed for a hand-over at this card: a Subroutine's question with its
@@ -652,7 +653,7 @@ private fun markerScanned(state: GameState, event: Event.MarkerScanned): Reducti
         is ScanStep.ShowPattern -> SubroutineInstance(
             step.entry.index,
             SubroutineKind.MemoryDump,
-            listOf(MemoryPattern.SOURCE) + patternFor(state.seed, id),
+            listOf(MemoryPattern.SOURCE) + patternFor(state.seed, id, unlike = step.held?.elements),
         )
         else -> instance?.let { SubroutineInstance(it.entry, it.subroutine, it.parameters) }
     }
@@ -668,7 +669,10 @@ private fun markerScanned(state: GameState, event: Event.MarkerScanned): Reducti
         else -> null
     }
     val stepped = when (step) {
-        is ScanStep.ShowPattern -> opened.offering(event.actor, offered)
+        // The source re-scanned while its pattern is held lets the held one go (D-330): the line
+        // reads as it did before BEGIN, and BEGIN takes the fresh one offered here. With nothing
+        // held, putting down is a no-op.
+        is ScanStep.ShowPattern -> opened.putDown(event.actor, step.entry.index).offering(event.actor, offered)
         is ScanStep.TakeDisk -> if (briefed) {
             opened.offering(event.actor, offered)
         } else {
@@ -773,7 +777,8 @@ private fun performanceEnded(
  *
  * - **A Memory Dump's pattern is held from here** (the build's call, provisional, recorded in
  *   D-325): BEGIN starts the playback, and NOT THIS ONE, which sends nothing, holds nothing. A
- *   pattern already held for the line is replaced, as a fresh source scan replaced it in D-322.
+ *   pattern already held for the line was let go by the source scan that offered this one (D-330),
+ *   so NOT THIS ONE after a re-scan leaves nothing held.
  * - **An Array Wipe's first disk is taken here** (the owner's 2026-11-22 ruling): the first Spares
  *   is briefed, and BEGIN takes DISK 01.
  *

@@ -15119,6 +15119,147 @@ D-327). `rehearse-check.py`: 21 of 21.
 **The e2e suite** (`./e2e.sh`, once): 3 test cases, 1 of 1 runs green. Its cold-start walk taps no
 CONTINUE (it stops at the permissions gate the simulator refuses), so nothing in it changed.
 
+### D-330 · **The source re-scanned while its pattern is held restarts it with a fresh, different one; the stairs warning's hold reads UNREGISTER AND PROCEED; the strip's padlock shows for anything carried, a held pattern as a disk — built (recording 54)**
+
+**The rulings** (owner, 2026-11-23, on D-328's three follow-ups):
+
+1. **Re-scanning the source restarts a forgotten pattern.** While a Memory Dump pattern is held,
+   scanning that line's source card drops the held pattern and offers a fresh one: the source
+   briefing, then BEGIN plays a new pattern, as D-325's BEGIN works. This is the GDD's *failure:
+   back to the source* without forcing a wrong entry. The target still opens the entry; the meeting
+   card and the Terminal stay allowed; every other card still says CARRYING . GO TO <ROOM>. The new
+   pattern must differ, using the house's existing fresh-pattern draw. This replaces D-328's *the
+   source again included*.
+2. **UNREGISTER AND CONTINUE becomes UNREGISTER AND PROCEED**, the stairs warning's two-second hold
+   (D-141), the last CONTINUE in the app.
+3. **The status strip's padlock shows while a Memory Dump pattern is held**, as for an Array Wipe
+   disk: the same rule for anything carried, the same icon, ink and place, both roles alike. This
+   closes D-328's *seen and not changed*.
+
+**1 · The source restarts (`core` `stepAt`, `Rules.markerScanned`, `patternFor`).**
+
+- **The step.** With a pattern held, `stepAt` answers the held line's target with `EnterPattern` (as
+  D-328), **its own source with `ShowPattern(entry, held)`**, and every other card with `Nothing`
+  (D-328's CARRYING . GO TO <ROOM>, unchanged). A card that is both is the target, as before. Only
+  the held line's source: another line's source is any other card.
+- **Let go at the scan.** The source's transition is now `putDown(seat, entry)` then `offering(seat,
+  fresh)`: the held pattern goes at the scan, the fresh one is offered, and nothing is held until
+  BEGIN takes it (`carryBegun`, unchanged). So **NOT THIS ONE after a re-scan leaves nothing held**,
+  the order's digit reads 0 and the row reads the source's room again, and the target opens nothing
+  until BEGIN. The answer is the source's: the pattern shown, no *no*, the order back, the place,
+  constructed once outside the decision as every scan's three are (rule 1). Nothing reads the role.
+- **Different, off the existing draw.** `patternFor(seed, id, unlike)`: the same `Draw` off the
+  scan's minted id shuffles the four places as before; while the result equals `unlike` (the held
+  pattern) it shuffles again from the same stream. With nothing held (`unlike` null, every scan but
+  this one) it is the draw it always was, byte for byte, so `drawParameters`' sweep and every other
+  source scan are unchanged. With one held, 23 of 24 first shuffles already differ. Deterministic,
+  seeded, recorded: a replay re-draws exactly what it showed. The house never sends the old pattern
+  again (F-015); the comparison is inside the house.
+- **Untouched.** A mismatch at the target still consumes the pattern and sends the player back to the
+  source (D-325); a fresh source scan with nothing held is not compared with anything (not ruled).
+  The meeting card and the Terminal are routed before `stepAt`, as D-328 says. A disk in hand still
+  answers first, so a seat holding a disk and a pattern at once (which no lawful round reaches)
+  is refused at the source as before.
+
+**2 · UNREGISTER AND PROCEED (`ui` `ScreensHost.kt`).** The hold's label, its KDoc (which now says it
+read CONTINUE until D-330), the comments that name it (`Controls.kt`, `Flow.kt`, `FlowTest.kt`),
+`HoldInputTest` (the test renamed `unregisterAndProceedTakesTwoSeconds`), the mockup
+(`tools/design-mockup/s_setup.py`, not rebuilt or published) and the e2e suite's
+`HumanMock.swift`, which waits for and taps the warning by that label (three places). No CONTINUE
+label is left in the app. One stale comment outside the ruling remains, unchanged:
+`app/src/cheats/.../Cheats.kt:634` still calls PERIMETER ARMED's control CONTINUE (D-328 renamed it).
+
+**3 · The padlock for anything carried (`ui` `Flow.carriesAnything`, `PanelVals.lockChip`).** One
+function: a disk in hand (the house's carry) **or** a Memory Dump line the house marked held (D-325's
+digit, the one `carryingTo` reads; never the pattern). `lockChip` is Files **or** that, so the
+padlock is the same `Padlock` in the same strip slot with the same ink, and it shows on every screen
+that draws the strip, for both roles. It clears when the house's order says the pattern is no longer
+held: the hand-over, accepted or rejected, and the source re-scanned (until BEGIN takes the fresh
+one). Files is unchanged: it still shows nothing for a pattern.
+
+**The recording: 53 → 54.** Justified: under 53 a scan of the held line's source was refused; now it
+lets the pattern go and shows a fresh one drawn unlike it, so the same events answer with different
+effects and leave a different state, and a version 53 round would replay differently. No event,
+effect, field or row changed shape. (D-329, built at the same time, may also bump; whichever lands
+second takes the next number.)
+
+| site | before | after |
+|---|---|---|
+| `core` `Carrying.kt` | held: the target or `Nothing` | + the held line's source is `ShowPattern(entry, held)`; `patternFor(…, unlike)` |
+| `core` `Rules.kt` | the source offers | the source puts the held pattern down, then offers; the draw unlike it |
+| `model` `Carrying.kt`, `GameState.kt` | KDoc: the source refused | KDoc: the source restarts (D-330) |
+| `harness` `Recording.kt` and the six pins | 53 | 54 |
+| `ui` `Flow.kt`, `PanelModel.kt` | padlock: Files or a disk | `Flow.carriesAnything`: Files, a disk or a held pattern |
+| `ui` `ScreensHost.kt`, `Controls.kt`, `Flow.kt` | UNREGISTER AND CONTINUE | UNREGISTER AND PROCEED |
+| `tools/design-mockup/s_setup.py`, `iosApp/…/HumanMock.swift` | CONTINUE | PROCEED |
+
+**Guards.** Core (`WorkOrderStructureTest`, `MemoryDumpTest`, 8 now): **re-scanning the source while
+a pattern is held lets it go and offers a fresh different one** (120 re-scans in a row, each BEGUN:
+the source's pattern shown, four places once each, never the held one, no *no*, nothing in the carry,
+nothing held after the scan and the order's digit 0, BEGIN holding exactly what was shown; and the
+plain draw off the same minted id counted where it would have repeated the held pattern, asserted
+more than zero, so the difference guard is shown reached; then the target opens against the last
+pattern and accepts it); **re-scanning the source and pressing NOT THIS ONE leaves nothing held**
+(the target then opens nothing; held again, another card is refused with the *no* and the Terminal
+still reads); **the fresh draw differs from the held pattern even where the plain draw repeats it**
+(400 ids: unchanged for a pattern it could never repeat, never the plain draw when that is held, four
+places each once); D-328's *every card but its target is refused* now leaves the source out of its
+sweep. App (`StructuredWorkBenchTest`, the bench through `RoundAuthority.cardRead` on the phones' own
+`FlowModel`s): **theSourceReScannedWhileAPatternIsHeldRestartsItWithAFreshOne** (six restarts: the
+phone on the caught scan, no *no*, the house holding nothing, no padlock; BEGIN plays SubMemory, a
+pattern unlike the last, the padlock back; the target then accepts the fresh one and the padlock
+goes), and `aHeldPatternRefusesEveryOtherCardWithWhereToGo` keeps another card's refusal and adds the
+padlock. Ui (desktop), `HeldPatternRender`, 3, below. Moved with the change: `HoldInputTest`,
+`FlowTest`'s comment, the six recording pins.
+
+**Proved red by injection** (the source refused again: `stepAt`'s source branch back to
+`ScanStep.Nothing`), each restored and green again, quoted from the XML.
+- `:core:jvmTest`, `MemoryDumpTest` 2 of 8 red: *re-scanning the source while a pattern is held lets
+  it go and offers a fresh different one: java.lang.AssertionError: attempt 0: the source opened
+  nothing while its pattern was held*; *re-scanning the source and pressing NOT THIS ONE…:
+  java.lang.AssertionError: the re-scan kept the forgotten pattern expected null, but
+  was:<home.someoneshome.model.Carry$Pattern@1e16c0aa>*.
+- `:app:iosSimulatorArm64Test`, `StructuredWorkBenchTest` 1 of 6 red:
+  *theSourceReScannedWhileAPatternIsHeldRestartsItWithAFreshOne: kotlin.AssertionError: attempt 0:
+  the source was refused while its pattern was held. Expected <ScanCaught>, actual <ScanBad>.*
+
+**Rendered and looked at** (`HeldPatternRender`, 720×1520 with the 36 px camera band, through
+`FlowHost` on a housed phone fed only house messages, `ui/build/screens/d330/<scene>-<role>.png`; every
+Resident's and Insider's pair `cmp`-identical, 11 of 11). *strip-0-nothing-carried*: SUBROUTINES 1 OF 6
+DONE, MEMORY DUMP · BED 2 · the cross; the strip is the bars, ARMED and the clock's dash, no padlock.
+*strip-1-pattern-held*: the same list with MEMORY DUMP · TO HALL · the diamond, and **the padlock
+between ARMED and the dash**. *strip-2-pattern-held-page-1*: page 1 (SYSTEM INTEGRITY, NEXT SUBROUTINE
+JAM, COMPLETED 1 OF 6, the four tiles, the dock), the padlock on the same strip. *strip-3-disk-in-hand*:
+the padlock for a disk; **its strip is pixel-identical to the held pattern's** (asserted: the same
+icon, ink and place). *strip-4-handed-over-accepted* and *-rejected*: no padlock; the strip
+pixel-identical to the empty-handed one (asserted). *strip-5-files-while-held*: FILES, 0 ITEMS, nothing
+listed, the padlock on the strip. *source-1-rescanned-briefing*: CAUGHT, the cross, BED 2, SUBROUTINE 4
+OF 6 with the MEDIUM mark, DOTS WILL FLASH IN ORDER. / CARRY THE ORDER IN YOUR HEAD., BEGIN, NOT THIS
+ONE; no padlock. *source-2-fresh-pattern-playing*: MEMORY DUMP with the MEDIUM mark, the 2×2 dots with
+the bottom-right lit (the fresh pattern's second dot, 2 s in), MOTION BUDGET HOLDING, STOP NOW, the
+padlock back; BEGIN sent `BeginCarry`. *source-3-other-card-carrying*: SCAN, the refusal
+ring, CARRYING . / GO TO HALL, SCAN ANOTHER, SEE MY SUBROUTINES, the padlock. *stairs-warning*: the
+bone setup screen, GARAGE BECOMES STAIRS, THESE WOULD BE UNREGISTERED with the two card shapes, the
+body sentence, the lit MOVE THEM FIRST and the outlined **UNREGISTER AND PROCEED** above HOLD THE BUTTON
+FOR TWO SECONDS.; no CONTINUE anywhere on it (asserted).
+
+**Not on a phone.** None of this has run on one. The phone session's checklist gains the lines.
+
+**Checked** (on the final tree, `*/build/test-results` cleared first: `./gradlew check --continue`
+with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
+each BUILD SUCCESSFUL, the app's XML copied out after each, every result XML counted with a python
+glob): model 369 (JVM) + 350 (iOS Simulator); core 478 + 476; platform 218; harness 138; ui 882
+(desktop) + 448 (iOS Simulator); cards 17; app 319 (the default variant), 192 (Release), 319
+(Playtest). **3,695 in the default check, 4,206 across the three, 0 failures, 0 errors, 0 skipped.**
+This entry's own: core 3 more on each target, ui 3 more on the desktop, app 1 more in the variants
+that carry cheats. `vocabularyLint`, `redactionLint` and `boundaryCheck` ran in it, clean. None of
+the known load flakes fired. buildSrc's own tests (`./gradlew -p buildSrc test --rerun-tasks`): 35,
+0 failures.
+
+**The e2e suite** (`./e2e.sh`, once): 3 test cases, 1 of 1 runs green. Its stairs test
+(`testAShortPressDoesNotConfirmAndATwoSecondHoldDoes`) jumps to the warning and waits for, holds and
+watches **UNREGISTER AND PROCEED** by label, so the new label is driven from outside the process.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

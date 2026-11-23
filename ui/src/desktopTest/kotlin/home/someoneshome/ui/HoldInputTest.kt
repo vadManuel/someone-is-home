@@ -32,7 +32,7 @@ import kotlin.test.assertTrue
  *
  * Five controls take the two-second hold, and they are five separate things that are irreversible
  * at the moment they complete: the vote lock, arming a Revoke, arming an Egress, the host's LIGHTS
- * OUT and StairsWarn's UNREGISTER AND CONTINUE. Four of the five are pressed in the dark by a thumb
+ * OUT and StairsWarn's UNREGISTER AND PROCEED. Four of the five are pressed in the dark by a thumb
  * that cannot see what it is over.
  *
  * The vote and LIGHTS OUT are driven where their own screens are — `MeetingInputTest` and
@@ -413,20 +413,20 @@ class HoldInputTest {
     // ---- The stairs warning ----------------------------------------------------------------------
 
     /**
-     * **UNREGISTER AND CONTINUE is a hold**: it discards a registration the host climbed the stairs
+     * **UNREGISTER AND PROCEED is a hold**: it discards a registration the host climbed the stairs
      * to make, and the only way back is climbing them again with the cards in hand.
      */
     @Test
-    fun unregisterAndContinueTakesTwoSeconds() = runDesktopComposeUiTest(width = 300, height = 650) {
+    fun unregisterAndProceedTakesTwoSeconds() = runDesktopComposeUiTest(width = 300, height = 650) {
         val model = on(ScreenId.RoomEdit)
         model.editor.open("GARAGE")
         model.pickRoomType(RoomKind.Stairs)
         assertEquals(ScreenId.StairsWarn, model.state.screen, "the warning did not come up")
         show(model)
 
-        onNodeWithText("UNREGISTER AND CONTINUE").performTouchInput { down(center) }
+        onNodeWithText("UNREGISTER AND PROCEED").performTouchInput { down(center) }
         mainClock.advanceTimeBy(nearly)
-        onNodeWithText("UNREGISTER AND CONTINUE").performTouchInput { up() }
+        onNodeWithText("UNREGISTER AND PROCEED").performTouchInput { up() }
         mainClock.advanceTimeBy(enough)
         assertNotEquals(
             RoomKind.Stairs, model.editor.heldKind,
@@ -434,7 +434,7 @@ class HoldInputTest {
         )
         assertEquals(ScreenId.StairsWarn, model.state.screen)
 
-        onNodeWithText("UNREGISTER AND CONTINUE").performTouchInput { down(center) }
+        onNodeWithText("UNREGISTER AND PROCEED").performTouchInput { down(center) }
         mainClock.advanceTimeBy(enough)
         assertEquals(RoomKind.Stairs, model.editor.heldKind, "a full hold changed nothing")
         assertEquals(ScreenId.Editor, model.state.screen, "the host was left on the warning")

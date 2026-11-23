@@ -93,13 +93,14 @@ sealed interface Carry {
      * The house holds the pattern so that it can grade the target. **No client type carries it**
      * after the source scan that showed it: the phone may not keep it (*only your head is
      * off-network*), and Files never shows it (F-015). A hand-over at the target consumes it,
-     * matched or not, which is what *a mismatch sends you back to the source* is; while it is held
-     * the source itself is refused like every other card (D-328), so a fresh pattern is drawn only
-     * once the target has taken this one.
+     * matched or not, which is what *a mismatch sends you back to the source* is.
      *
      * **While one is held, every card but its target is refused, as a disk is** (the owner's
      * 2026-11-23 ruling, D-328, replacing D-322's *a held pattern does not block other scans*); the
-     * meeting card and the Terminal are routed before the rules and stay allowed.
+     * meeting card and the Terminal are routed before the rules and stay allowed. **The one other
+     * card that answers is that line's own source, which lets this pattern go and offers a fresh,
+     * different one** (the owner's 2026-11-23 ruling, D-330): a player who forgot it goes back for
+     * another without handing over a wrong entry first.
      */
     class Pattern(override val seat: Seat, override val entry: Int, val elements: List<Int>) : Carry
 

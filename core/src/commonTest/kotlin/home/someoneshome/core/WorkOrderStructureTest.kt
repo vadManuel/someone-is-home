@@ -728,8 +728,9 @@ class MemoryDumpTest {
     }
 
     @Test
-    fun `while a pattern is held every card but its target is refused and the meeting card and the Terminal are still answered`() {
-        // The owner's 2026-11-23 ruling (D-328), replacing D-322's *a held pattern does not block other scans*.
+    fun `while a pattern is held every card but its target and its source is refused and the meeting card and the Terminal are still answered`() {
+        // The owner's 2026-11-23 ruling (D-328), replacing D-322's *a held pattern does not block
+        // other scans*; the source answers again by the owner's later ruling (D-330), below.
         val terminal = MarkerId("t")
         var (state, seat, clock) = ready(terminal)
         val dump = dumpOf(state, seat)
@@ -738,8 +739,8 @@ class MemoryDumpTest {
         state = begin(state, seat, clock).state
         val held = assertNotNull(state.patternOf(seat, dump.index), "BEGIN held no pattern").elements
 
-        // Every other card of the home, the source again included: refused, with D-320's *no*.
-        for (card in CARDS.filter { it != target }) {
+        // Every other card of the home: refused, with D-320's *no*.
+        for (card in CARDS.filter { it != target && it != source }) {
             val refused = scan(state, seat, card, clock)
             val answer = refused.effects.filterIsInstance<Effect.ScanAnswered>().single()
             assertNull(answer.opened, "${card.value} opened something while a pattern was held")
@@ -770,6 +771,91 @@ class MemoryDumpTest {
         val asked = scan(state, seat, target, clock)
         val entry = MemoryPattern.of(assertNotNull(asked.effects.filterIsInstance<Effect.ScanAnswered>().single().opened).parameters)
         assertTrue(!entry.shown && entry.length == held.size, "the target did not ask for the pattern back")
+    }
+
+    @Test
+    fun `re-scanning the source while a pattern is held lets it go and offers a fresh different one`() {
+        // The owner's 2026-11-23 ruling (D-330): a forgotten pattern restarts at the source.
+        var (state, seat, clock) = ready()
+        val dump = dumpOf(state, seat)
+        val (source, target) = dump.markers
+        state = scan(state, seat, source, clock).state
+        state = begin(state, seat, clock).state
+        var held = assertNotNull(state.patternOf(seat, dump.index), "BEGIN held no pattern").elements
+
+        // Re-scanned, many times over: each answer is the source's, drawn unlike the pattern held.
+        // The plain draw off the same minted id is counted where it would have repeated, so the
+        // guard is shown to have been reached rather than assumed.
+        var repeatsAvoided = 0
+        repeat(120) { attempt ->
+            val (id, _) = state.mintId()
+            val again = scan(state, seat, source, clock)
+            val answer = again.effects.filterIsInstance<Effect.ScanAnswered>().single()
+            val shown = MemoryPattern.of(assertNotNull(answer.opened, "attempt $attempt: the source opened nothing while its pattern was held").parameters)
+            assertTrue(shown.shown && shown.length == MemoryPattern.LENGTH, "attempt $attempt: the source did not show a pattern")
+            assertEquals((0 until 4).toList(), shown.elements.sorted(), "attempt $attempt: the pattern is not the four dots, each once")
+            assertNotEquals(held, shown.elements, "attempt $attempt: the source showed the forgotten pattern again")
+            if (patternFor(state.seed, id) == held) repeatsAvoided++
+            assertNull(answer.haptic, "attempt $attempt: the source said *no*")
+            assertNull(answer.carrying, "a pattern rode the carry: Files must never show it (F-015)")
+            // Let go at the scan: nothing held, and the order reads as it did before BEGIN.
+            assertNull(again.state.patternOf(seat, dump.index), "attempt $attempt: the re-scan kept the forgotten pattern")
+            val line = again.effects.filterIsInstance<Effect.WorkOrderIssued>().single().lines[dump.index]
+            assertEquals(0, assertIs<OrderLine.Known>(line).pattern, "attempt $attempt: the order still says the old pattern is held")
+            // BEGIN takes the fresh one, as D-325's BEGIN always has.
+            val begun = begin(again.state, seat, clock)
+            assertEquals(shown.elements, begun.state.patternOf(seat, dump.index)?.elements, "attempt $attempt: BEGIN did not take the fresh pattern")
+            state = begun.state
+            held = shown.elements
+        }
+        assertTrue(repeatsAvoided > 0, "no plain draw would have repeated: the difference guard was never reached")
+
+        // The target still opens, against the pattern held now, and takes it back.
+        val asked = scan(state, seat, target, clock)
+        val entry = MemoryPattern.of(assertNotNull(asked.effects.filterIsInstance<Effect.ScanAnswered>().single().opened).parameters)
+        assertTrue(!entry.shown && entry.length == held.size, "the target did not ask for the pattern back")
+        val graded = hand(asked.state, seat, target, held, clock)
+        assertEquals(listOf(true), graded.effects.filterIsInstance<Effect.SubroutineGraded>().map { it.accepted }, "the fresh pattern was not the one graded")
+        assertTrue(dumpOf(graded.state, seat).done)
+    }
+
+    @Test
+    fun `re-scanning the source and pressing NOT THIS ONE leaves nothing held and every other card still refused while held`() {
+        val terminal = MarkerId("t")
+        var (state, seat, clock) = ready(terminal)
+        val dump = dumpOf(state, seat)
+        val (source, target) = dump.markers
+        state = scan(state, seat, source, clock).state
+        state = begin(state, seat, clock).state
+        // NOT THIS ONE after the re-scan sends nothing: the forgotten pattern is gone and nothing
+        // new is held, so the target opens nothing.
+        state = scan(state, seat, source, clock).state
+        assertNull(state.patternOf(seat, dump.index), "the re-scan kept the forgotten pattern")
+        val shut = scan(state, seat, target, clock)
+        assertNull(shut.effects.filterIsInstance<Effect.ScanAnswered>().single().opened, "the target opened with nothing held")
+        // Held again: another card is still CARRYING (D-328), the Terminal still answers.
+        state = scan(shut.state, seat, source, clock).state
+        state = begin(state, seat, clock).state
+        val other = CARDS.first { it != source && it != target }
+        val refused = scan(state, seat, other, clock).effects.filterIsInstance<Effect.ScanAnswered>().single()
+        assertNull(refused.opened, "${other.value} opened while a pattern was held")
+        assertEquals(home.someoneshome.model.Haptic.Double, refused.haptic)
+        val read = scan(state, seat, terminal, clock)
+        assertEquals(listOf(true), read.effects.filterIsInstance<Effect.TerminalAnswered>().map { it.reading })
+    }
+
+    @Test
+    fun `the fresh draw differs from the held pattern even where the plain draw repeats it`() {
+        // Off the same stream: with nothing held the draw is unchanged, and where its first shuffle
+        // is the held pattern the next one that differs is taken (D-330).
+        for (i in 0L until 400L) {
+            val id = home.someoneshome.model.EntityId(i)
+            val plain = patternFor(20261123L, id)
+            assertEquals(plain, patternFor(20261123L, id, unlike = listOf(9, 9, 9, 9)), "the draw moved for a pattern it could never repeat")
+            val other = patternFor(20261123L, id, unlike = plain)
+            assertNotEquals(plain, other, "id $i: the fresh draw repeated the held pattern")
+            assertEquals((0 until 4).toList(), other.sorted(), "id $i: the fresh draw is not the four dots, each once")
+        }
     }
 
     @Test

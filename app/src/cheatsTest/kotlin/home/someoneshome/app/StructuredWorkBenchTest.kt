@@ -110,6 +110,12 @@ class StructuredWorkBenchTest {
             while (pending.isNotEmpty()) house.heard(pending.removeAt(0))
         }
 
+        /** STOP NOW or PROCEED on the phone, and the window's report heard by the house before anything else. */
+        suspend fun stop(seat: Seat) {
+            phones.getValue(seat).stopSubroutine()
+            while (pending.isNotEmpty()) house.heard(pending.removeAt(0))
+        }
+
         /** A station read as a player walks it: the first Spares is briefed, so BEGIN follows it (D-325). */
         suspend fun station(seat: Seat, card: MarkerId) {
             read(seat, card)
@@ -202,7 +208,9 @@ class StructuredWorkBenchTest {
     /**
      * **GUARD (D-328): while a Memory Dump pattern is held, every card but its target is refused on
      * the phone as CARRYING . GO TO <the target's room>, with the *no*; the target still opens.** The
-     * owner's 2026-11-23 ruling, on a phone's real model through the house's own card-read path.
+     * owner's 2026-11-23 ruling, on a phone's real model through the house's own card-read path. The
+     * source is the one other card that answers (D-330), in the test after this one; the strip's
+     * padlock shows throughout (D-330).
      */
     @Test
     fun aHeldPatternRefusesEveryOtherCardWithWhereToGo() = bench { bench ->
@@ -221,24 +229,76 @@ class StructuredWorkBenchTest {
         phone.stopSubroutine()
         val targetRoom = state.destinations.single { it.marker == target }.room
 
-        // Another card with work on it, and the source again: both refused, naming the target's room.
+        // The padlock shows while the pattern is held, as for a disk (D-330).
+        assertTrue(PanelVals(phone.state).lockChip, "the strip shows no padlock while a pattern is held")
+
+        // Another card with work on it: refused, naming the target's room.
         val order = bench.house.state.workOrderFor(seat)!!
         val other = assertNotNull(
-            order.entries.firstOrNull { it.work is AssignedWork.Subroutine && order.isActionable(it) && it.anchor != target },
+            order.entries.firstOrNull { it.work is AssignedWork.Subroutine && order.isActionable(it) && it.anchor != target && it.anchor != source },
             "the seed left this seat no Subroutine to try while the pattern is held",
         )
-        for (card in listOf(other.anchor!!, source)) {
-            bench.read(seat, card)
-            assertEquals(ScreenId.ScanBad, phone.state.screen, "${card.value} opened while a pattern was held")
-            assertEquals(targetRoom, PanelVals(phone.state).carryingTo, "${card.value}'s refusal does not name the target's room")
-            assertEquals(Haptic.Double, bench.lastAnswer(seat).haptic(), "${card.value}'s refusal did not say no (D-320)")
-            assertNull(phone.state.carrying, "a held pattern reached Files (F-015)")
-            assertNotNull(bench.house.state.patternOf(seat, dump.index), "${card.value} let go of the pattern")
-        }
+        val card = other.anchor!!
+        bench.read(seat, card)
+        assertEquals(ScreenId.ScanBad, phone.state.screen, "${card.value} opened while a pattern was held")
+        assertEquals(targetRoom, PanelVals(phone.state).carryingTo, "${card.value}'s refusal does not name the target's room")
+        assertEquals(Haptic.Double, bench.lastAnswer(seat).haptic(), "${card.value}'s refusal did not say no (D-320)")
+        assertNull(phone.state.carrying, "a held pattern reached Files (F-015)")
+        assertNotNull(bench.house.state.patternOf(seat, dump.index), "${card.value} let go of the pattern")
+        assertTrue(PanelVals(phone.state).lockChip, "the padlock went with the refusal")
 
         // The target still opens.
         bench.read(seat, target)
         assertEquals(ScreenId.ScanCaught, phone.state.screen, "the target did not open while the pattern was held")
+    }
+
+    /**
+     * **The source re-scanned while its pattern is held restarts it** (the owner's 2026-11-23
+     * ruling, D-330), on the phone through `RoundAuthority.cardRead`: the source's briefing again,
+     * the forgotten pattern let go (the padlock goes and the row reads the source's room), BEGIN
+     * plays a fresh pattern that differs, the padlock back, and the target takes the fresh one.
+     */
+    @Test
+    fun theSourceReScannedWhileAPatternIsHeldRestartsItWithAFreshOne() = bench { bench ->
+        assertTrue(bench.house.arm(RoundCheat.SEED), "the bench never armed a round")
+        val state = bench.house.state
+        fun dumpOf(s: Seat) = state.workOrderFor(s)!!.entries.first { it.work == AssignedWork.MemoryDump }
+        val seat = seats.first { s -> state.alone(s, dumpOf(s).index) }
+        val dump = dumpOf(seat)
+        bench.clear(seat, dump.index)
+        val phone = bench.phones.getValue(seat)
+        val (source, target) = dump.markers
+
+        bench.read(seat, source)
+        bench.begin(seat)
+        val forgotten = assertNotNull(bench.house.state.patternOf(seat, dump.index), "BEGIN at the source held no pattern").elements
+        bench.stop(seat)
+        assertTrue(PanelVals(phone.state).lockChip, "no padlock while the pattern is held")
+
+        repeat(6) { attempt ->
+            val held = bench.house.state.patternOf(seat, dump.index)!!.elements
+            bench.read(seat, source)
+            assertEquals(ScreenId.ScanCaught, phone.state.screen, "attempt $attempt: the source was refused while its pattern was held")
+            assertEquals(null, bench.lastAnswer(seat).haptic(), "attempt $attempt: the source said *no*")
+            assertNull(bench.house.state.patternOf(seat, dump.index), "attempt $attempt: the re-scan kept the forgotten pattern")
+            assertTrue(!PanelVals(phone.state).lockChip, "attempt $attempt: the padlock outlived the pattern the re-scan let go")
+            bench.begin(seat)
+            assertEquals(ScreenId.SubMemory, phone.state.screen, "attempt $attempt: BEGIN did not play the fresh pattern")
+            val fresh = assertNotNull(bench.house.state.patternOf(seat, dump.index), "attempt $attempt: BEGIN held nothing").elements
+            assertTrue(fresh != held, "attempt $attempt: the fresh pattern is the forgotten one")
+            assertTrue(PanelVals(phone.state).lockChip, "attempt $attempt: no padlock for the fresh pattern")
+            bench.stop(seat)
+        }
+        val pattern = bench.house.state.patternOf(seat, dump.index)!!.elements
+        assertTrue(forgotten.isNotEmpty())
+
+        // The target opens against the fresh pattern, and the hand-over lets it go: the padlock too.
+        bench.read(seat, target)
+        assertEquals(ScreenId.ScanCaught, phone.state.screen, "the target did not open")
+        bench.house.heard(Intent.HandOverEntry(seat, target, pattern))
+        assertTrue(bench.house.state.workOrderFor(seat)!!.entries[dump.index].done, "the fresh pattern was not the one graded")
+        assertNull(bench.house.state.patternOf(seat, dump.index))
+        assertTrue(!PanelVals(phone.state).lockChip, "the padlock outlived the hand-over")
     }
 
     /**

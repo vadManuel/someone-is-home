@@ -342,6 +342,17 @@ object Flow {
         CircuitStation.entries.firstOrNull { carriedOf(DiskInHand(0, it)).to == carried.to }
 
     /**
+     * **Whether this phone is carrying anything: a disk in hand, or a Memory Dump pattern the house
+     * holds for it** (the owner's 2026-11-23 ruling, D-330: *the same rule for anything carried*).
+     * The disk is the house's carry; the pattern is the Memory Dump line the house marked held
+     * (D-325), the same digit [carryingTo] reads, and never the pattern itself. Two pushed facts
+     * read side by side; no role is read.
+     */
+    fun carriesAnything(carrying: Carried?, order: List<OrderLine>?): Boolean =
+        carrying != null ||
+            order.orEmpty().any { it is OrderLine.Known && it.work == AssignedWork.MemoryDump && it.pattern == 1 }
+
+    /**
      * **Where a card refused while carrying sends the player: the next stop's room, or null** (the
      * owner's 2026-11-23 ruling, D-328: *CARRYING . GO TO <ROOM>*). Off the house's carry, which this
      * phone already holds: a disk in hand goes to its station's room on the circuit's own line (one
@@ -2390,7 +2401,7 @@ class FlowModel(
         }
     }
 
-    /** UNREGISTER AND CONTINUE: the cards are given up and the room becomes stairs. */
+    /** UNREGISTER AND PROCEED: the cards are given up and the room becomes stairs. */
     fun confirmStairs() {
         editor.setKind(RoomKind.Stairs)
         go(ScreenId.Editor)

@@ -606,8 +606,8 @@ class GameState private constructor(
 
     /**
      * The pattern this seat holds, for whichever Memory Dump line, or null (D-328). At most one in a
-     * round played by the rules: while one is held every card but its target is refused, so no
-     * second source can be scanned.
+     * round played by the rules: while one is held every card but its target and its own source is
+     * refused (D-330), so no second line's source can be scanned.
      */
     fun patternHeldBy(seat: Seat): Carry.Pattern? =
         carries.firstOrNull { it.seat.index == seat.index && it is Carry.Pattern } as Carry.Pattern?
@@ -631,7 +631,7 @@ class GameState private constructor(
 
     /**
      * [seat]'s offer replaced by [offer], or dropped where it is null (D-325). Nothing [seat] holds
-     * is touched: a pattern held from an earlier source stays held until BEGIN replaces it.
+     * is touched here: the source re-scanned lets a held pattern go by [putDown], beside this (D-330).
      */
     fun offering(seat: Seat, offer: Carry?): GameState = copy(
         carries = (

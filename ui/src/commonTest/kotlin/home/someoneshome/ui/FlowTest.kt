@@ -560,7 +560,7 @@ class FlowTest {
         assertEquals(RoomKind.Room, model.editor.heldKind)
         assertEquals(2, model.editor.heldMarkers.size, "the cards were given up by the question")
 
-        // UNREGISTER AND CONTINUE: now, and only now.
+        // UNREGISTER AND PROCEED: now, and only now.
         val confirmed = FlowModel(PanelState(screen = ScreenId.StairsWarn))
         confirmed.editor.open("GARAGE")
         confirmed.confirmStairs()

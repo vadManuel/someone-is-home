@@ -707,7 +707,7 @@ fun ReadoutField(
  * **The two-second hold as a gesture, with nothing drawn** (D-141).
  *
  * *Hold what cannot be taken back.* Five controls in this app take it — the vote lock, arming a
- * Revoke, arming an Egress, the host's LIGHTS OUT and StairsWarn's UNREGISTER AND CONTINUE — and
+ * Revoke, arming an Egress, the host's LIGHTS OUT and StairsWarn's UNREGISTER AND PROCEED — and
  * they do not all look alike: three are the design's full-width bar-and-note block ([HoldToConfirm])
  * and two are springboard tiles that must go on looking exactly as they looked. So the *clock* is
  * here and the furniture is the caller's, which is what stops the five drifting into five slightly

@@ -385,10 +385,11 @@ private fun deleteRoomLabel(markers: Int, terminal: Boolean, meeting: Boolean): 
  * The cards are shown, not counted — the host is about to go and find these specific pieces of
  * paper, so a number would be the wrong thing to give them.
  *
- * **UNREGISTER AND CONTINUE is a two-second hold** (D-141): it discards a registration the host
+ * **UNREGISTER AND PROCEED is a two-second hold** (D-141): it discards a registration the host
  * climbed the stairs to make, and there is no way back to it except walking up there again with
  * the cards in hand. The safe control is the tap and the lit block, which is the Delete screen's
- * inversion and the same argument.
+ * inversion and the same argument. It read UNREGISTER AND CONTINUE until the owner's 2026-11-23
+ * ruling (D-330), the last CONTINUE in the app.
  */
 @Composable
 fun StairsWarnScreen(vals: PanelVals) {
@@ -418,7 +419,7 @@ fun StairsWarnScreen(vals: PanelVals) {
         KitSpacer()
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             KitPrimary("MOVE THEM FIRST", P) { go(ScreenId.MarkerSheet) }
-            KitHold("UNREGISTER AND CONTINUE", P, actions.confirmStairs, height = 56.dp, size = 24)
+            KitHold("UNREGISTER AND PROCEED", P, actions.confirmStairs, height = 56.dp, size = 24)
         }
     }
 }

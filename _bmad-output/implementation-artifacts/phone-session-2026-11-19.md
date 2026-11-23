@@ -53,6 +53,9 @@ Tick each line as you see it.
       the walk should carry on to the next row by itself, Bluetooth's answer included, without a
       second tap. If it stops after Bluetooth, note it: that is the stall the overnight run found
       on the simulators (D-314).
+- [ ] Mapping a home, set a room that holds cards to STAIRS: the warning's two-second hold reads
+      **UNREGISTER AND PROCEED** (D-330; it read UNREGISTER AND CONTINUE until then). A short press
+      does nothing; a full hold makes the room stairs.
 - [ ] On JOIN A HOME, deny the Local Network prompt: the screen reads LOCAL NETWORK IS OFF with
       OPEN SETTINGS under it. Turn Local Network on in Settings, come back, and the home appears.
       With no host running, NO HOME ON THIS NETWORK shows after about 10 s. Note the code on the
@@ -233,11 +236,15 @@ Tick each line as you see it.
       ORDER. / CARRY THE ORDER IN YOUR HEAD. BEGIN: four dots in a 2×2 grid flash in order, twice
       (about 9 s), with STOP NOW at the foot, then the screen shows the target's shape and TO <ROOM>
       with **PROCEED** at the foot (D-328); PROCEED goes to SUBROUTINES, where the row now reads
-      MEMORY DUMP · TO <ROOM>. **While you hold the pattern, every other card, the source again
-      included, says CARRYING . GO TO <the target's room> with two buzzes** (D-328); the meeting card
-      and the Terminal still work. Walk to the target and scan: THE DOTS WILL NOT FLASH. / TAP THEM BACK FROM MEMORY.
+      MEMORY DUMP · TO <ROOM>. **While you hold the pattern, every other card says CARRYING . GO TO
+      <the target's room> with two buzzes** (D-328); the meeting card and the Terminal still work.
+      **The padlock shows on the strip while you hold it**, where it shows for a disk (D-330), on both
+      roles' phones. **Forget it on purpose: scan the source again** (D-330). No buzz: the caught scan
+      says DOTS WILL FLASH IN ORDER. again, the padlock goes and the row reads the source's room.
+      BEGIN plays a **different** pattern, and the padlock comes back. NOT THIS ONE there leaves
+      nothing held (no padlock, and the target opens nothing). Walk to the target and scan: THE DOTS WILL NOT FLASH. / TAP THEM BACK FROM MEMORY.
       Tap the four back: RETURNED . WAITING, then THE HOUSE GROWS WEAKER (short buzz), the foot now
-      PROCEED, and the row is struck off. Do it once wrong on purpose: REJECTED . BACK TO <SOURCE
+      PROCEED, the row is struck off and the padlock is gone. Do it once wrong on purpose: REJECTED . BACK TO <SOURCE
       ROOM> (double buzz, PROCEED at the foot), and the target opens nothing until you rescan the
       source, which shows a new pattern. NOT THIS ONE
       at the source holds nothing. FILES never shows the pattern. Say whether 9 s is enough and
