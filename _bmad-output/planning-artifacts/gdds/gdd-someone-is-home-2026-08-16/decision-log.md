@@ -14795,6 +14795,10 @@ house decides), which is a protocol change for the owner. Even then the seat is 
 the round keeps it, and the phone, on PERMISSIONS with its token, is seated back into its round and
 replayed once NEARBY DEVICES is on and it rejoins.
 
+**Closed by D-329** (the owner, 2026-11-23: *"report this at the next meeting instead of kicking out
+a player"*): a lobby let-go now asks the house, which answers in the round's order; an armed seat is
+kept and its switch-off named at the first meeting. `roundHeard` stays as the fast path.
+
 **6 · Stale KDoc.** `SubroutineKind.MemoryDump` said its screens were STOPPED; it now says what D-325
 built.
 
@@ -15118,6 +15122,161 @@ D-327). `rehearse-check.py`: 21 of 21.
 
 **The e2e suite** (`./e2e.sh`, once): 3 test cases, 1 of 1 runs green. Its cold-start walk taps no
 CONTINUE (it stops at the permissions gate the simulator refuses), so nothing in it changed.
+
+### D-329 · **A lobby let-go asks the house first: the phone sends one fixed request and stays; the house releases a seat it has not armed, and keeps one it has armed or is arming, answering in the round's order, so the switch-off is named at the first meeting instead of a player being let go — built (nothing recorded moved; the format is 54, D-330's); closes D-327's open item**
+
+**The ruling** (owner, 2026-11-23, on D-327's open item, the gap just before lights out): *"This
+sounds like a rare edge case. I think we should continue with reporting this at the next meeting
+instead of kicking out a player."* The coordinator's note of it: *a lobby let-go now asks the house
+first. If the round is already armed, the seat is kept and the switch-off is named at the first
+meeting.* D-326's changed trigger (a later round's push counts as armed) stays.
+
+**The gap.** The house's arming pushes reach a phone one by one. A lobby check (the NEARBY DEVICES
+probe on a return, the Bluetooth radio's callback, a re-read) that found a grant off before the phone
+had heard **any** of them ran `leaveLobby` and `roundForgotten` on a seat the house had already armed:
+the round held a seat with nobody playing it, and the phone stood on PERMISSIONS. D-327's
+`roundHeard` closed the case once the first push had landed, and could not see a frame still in the
+air. Only the house can.
+
+**The request.** `LobbyBody.LetGo` (`letGo`), client → host, a data object: `{"type":"letGo"}`, the
+same bytes from every phone whichever grant is off and whoever holds it, the host's included over its
+own loopback socket. What is off stays inside the phone. `FlowModel.permissionsChecked` no longer
+moves anything: in the lobby (D-326's `inTheLobby`, `roundHeard` still its fast path) with something
+switched off, it asks (`LobbyModel.askToBeLetGo`, `LobbyLink.askToBeLetGo`) and the phone stays where
+it is, seated, on the screen it is on.
+
+**The answer.** The house puts the ask on its ordered arrival queue and asks the authority
+(`HouseDoors.letGo`, `RoundAuthority.letGo`) under **the lock an arming holds** from reading the
+desk to its last push (R6, D-241):
+
+- **Not armed: released.** The seat is taken off the desk *under that lock*, before it is let go, so
+  a LIGHTS OUT that follows reads a desk without it and cannot arm it; the standing goes out. The
+  answer is `LobbyBody.Released` (`released`). The phone then does exactly what D-311 did: a guest
+  leaves the lobby as LEAVE does, the rows read in place, and lands on PERMISSIONS with the row
+  REFUSED, keeping its name and seat token, and rejoins once it is back on. It leaves on RELEASED
+  whatever the grant reads by then, because the house has already taken its seat.
+- **Armed, or arming: kept.** An ask that waits behind an arming finds the seat armed. Nothing
+  changes at the house; the answer, `LobbyBody.SeatKept` (`seatKept`), goes on the seat's ordered
+  queue **after every arming push**, which were put there under the same lock, so the phone hears the
+  round first. It stays; the opening walks it to PERIMETER ARMED with everyone else; its first beat
+  reports the grant off at arming as a switch-off (D-311: *a grant already off when the round armed
+  counts too*); the first meeting names it in the owner's sentence, and it counts toward the close
+  (D-310, D-311). That is the owner's *report at the next meeting*.
+- **One width.** `released` and `seatKept` are eight letters each, so the two answers are the same
+  19 bytes (`LobbyWireTest` pins both whole). Every ask is answered once.
+- **The host** asks its own house the same way. Its seat is never taken off the desk. RELEASED shows it
+  PERMISSIONS with its house on the air and every guest seated, PROCEED back to its lobby (D-311's
+  host rule); KEPT, racing its own arming, leaves it in the round, and its check is a switch-off
+  named at the first meeting.
+
+**The timeout.** `LET_GO_PATIENCE_MILLIS` = **5,000 ms**, provisional, in `ui` (`Flow.kt`). One ask at
+a time: a check while an ask waits asks nothing more until the patience has passed with no answer,
+and then **the next trigger** asks again. No timer runs it, and **the phone never leaves without the
+house's answer**; a late answer is still honoured (RELEASED walks it, KEPT leaves it). A house that
+never answers leaves the phone in the lobby; if a round arms it, D-311's backstop counts the grant
+off at its first beat. Five seconds is many round trips on a home's Wi-Fi plus an arming's writes,
+and still shorter than a walk back from Settings.
+
+**Parity.** The lobby has no roles, and nothing on either side reads one: the ask carries nothing,
+and the house's question is whether the seat is in an armed round. An Insider's phone and a
+Resident's that race the same arming are told the same bytes, stand on the same screens, and are
+named in the same sentence. No new copy, light, colour or type; the new lines are the console's.
+
+**Recording: nothing moved, so no bump.** Built on D-330's tree, whose format is 54, and 54 stays: the lobby is not recorded; the switch-off still reaches the house
+as the one fixed `RadioFaulted` body with the cause `Permission`.
+
+| site | what it did | what it does now |
+|---|---|---|
+| `model` `LobbyBody` | six bodies | `LetGo` up; `Released` and `SeatKept` down, one width |
+| `ui` `LobbyLink`, `LobbyModel` | | `askToBeLetGo`, answered `LetGoAnswer.Released` or `Kept`; a link with no house answers RELEASED at once |
+| `ui` `MemoryLobbyLink` | | answers at once, or holds the answer for a test (`holdsLetGo`, `answerLetGo`) |
+| `ui` `FlowModel.permissionsChecked` | let the phone go | asks, once per `LET_GO_PATIENCE_MILLIS`; `letGoAnswered` walks on RELEASED |
+| `app` `LobbyHouse` | | the ask on the ordered queue, the authority asked, the seat off the desk on a release (never the host's), one answer on the seat's queue |
+| `app` `RoundAuthority.letGo`, `HouseDoors.letGo` | | kept or released under the arming's lock |
+| `app` `LobbyOverTransport` | | sends the ask, hands the answer to the flow; the door threaded through |
+| `app` `Cheats.kt` (`CheatRoot`), `LineWatch` | | the door wired; the two answers among the frames a client should get |
+
+**Tests.** `LobbyWireTest` (model): the three discriminators pinned, the request and both answers
+byte for byte, the answers one width. `ForeignBodyTest` (model): the three among the lobby's bodies.
+`LobbyLetGoTest` (ui, common, 5, new): the check asks and moves nothing until the house answers, and
+RELEASED walks the guest to PERMISSIONS with the row refused; KEPT leaves the seat and the arming walks
+it to ARMED, and KEPT before any push moves nothing; one ask at a time, asked again only after the
+patience, thirty seconds of triggers never leaving, and a late RELEASED honoured; a phone holding a
+round's push asks nothing; the host asks and follows the host rule on RELEASED, stays on KEPT.
+`PermissionCloseLoopbackTest` (app, real sockets on loopback, 3 new, 1 changed; the host's door wired
+as `CheatRoot` wires it): *aGuestSwitchingOffInTheLobbyLeavesItAndIsNotInTheRound* now asks, stays,
+is answered RELEASED and only then lands on PERMISSIONS and off the round;
+*aRefusedCheckRacingTheArmingKeepsTheSeatAndIsNamedAtTheFirstMeeting* (every frame to the guests held
+while the house arms all four seats, an Insider guest and a Resident guest find BLUETOOTH refused,
+each asks and stays, the house answers KEPT twice, the arming arrives before the answer on both,
+both walk to ARMED seated, both are told the same bytes once, both grants off go up as
+`Permission` once, and the first meeting names both in the permission sentence on every phone;
+the seed is found by `insidersFor` so the race has an Insider guest whatever the seats);
+*theHostRequestsALetGoOfItsOwnHouseAndFollowsTheHostRule* (before arming RELEASED, PERMISSIONS, every seat on
+the desk, PROCEED back; racing its own arming KEPT, ARMED, named at the first meeting);
+*aHouseThatDoesNotAnswerLeavesThePhoneWhereItIsAndTheNextTriggerAsksAgain* (the house's door held
+shut: one ask, none more inside the patience, still seated; past it the next trigger asks again; the
+door opens and RELEASED, only then, walks the guest to PERMISSIONS and off the desk). Exhaustive
+`when`s naming the new bodies: `LobbyLoopbackTest` (platform), `RoundEndedPushTest` (app).
+
+**Proved red by injection**, restored and green again, quoted from the XML. **The phone lets itself
+go without asking** (`permissionsChecked` calling `letGoAnswered(LetGoAnswer.Released)` in place of
+the ask, D-311's old walk), `:app:iosSimulatorArm64Test` on `PermissionCloseLoopbackTest` and
+`:ui:desktopTest` on `LobbyLetGoTest`, on the rebased tree: 8 of 12 red. The race:
+*aRefusedCheckRacingTheArmingKeepsTheSeatAndIsNamedAtTheFirstMeeting*: `JO (Insider) let a seat the
+house had armed go on its own word: on Perms`. And *aGuestSwitchingOffInTheLobbyLeavesItAndIsNotInTheRound*:
+`Dani left the lobby on its own word, before the house answered. Expected <Lobby>, actual <Perms>.`;
+*theHostRequestsALetGoOfItsOwnHouseAndFollowsTheHostRule*: `the host moved before its house answered.
+Expected <Lobby>, actual <Perms>.`; *aHouseThatDoesNotAnswer…*: `never happened: the house heard Mia's
+ask`; and four of `LobbyLetGoTest`'s five, among them *theCheckAsksAndMovesNothingUntilTheHouseAnswers*:
+`the lobby's check did not ask the house to let the phone go expected:<1> but was:<0>`. Restored: 7 of
+7 and 5 of 5. (Run before the rebase onto D-330 too, with the same result; the Insider drawn for the
+race was DANI there.)
+
+**Checked** (rebased onto D-330, `69a0e34`, on the final tree, `*/build/test-results` cleared first:
+`./gradlew check --continue` with the two variant sweeps excluded, then `:app:variantSweepRelease`,
+then `:app:variantSweepPlaytest`, each BUILD SUCCESSFUL, the app's XML copied out after each, every
+result XML counted with a python glob): model 370 (JVM) + 351 (iOS Simulator); core 478 + 476;
+platform 218; harness 138; ui 887 (desktop) + 453 (iOS Simulator); cards 17; app 322 (the default
+variant), 195 (Release), 322 (Playtest). **3,710 in the default check, 4,227 across the three, 0
+failures, 0 errors, 0 skipped.** This entry's own: model 1 more on each target (`LobbyWireTest`), ui 5
+more on each target (`LobbyLetGoTest`), app 3 more in every variant (`PermissionCloseLoopbackTest`).
+`vocabularyLint`, `redactionLint`, `boundaryCheck` and the cordons ran in it, clean. Neither known load
+flake fired in it. An earlier full run, before the rebase, caught two test names the lint reads as
+*task* (*theHost**Asks**…*: `tAsk`), renamed, and `OutboundQueueTest.aSeatThatStopsDraining…`, the
+known load flake, which failed in that run and once more alone, then passed three lone runs once
+the machine's load had fallen; it passed in the final run. buildSrc's
+own tests (`./gradlew -p buildSrc test --rerun-tasks`): 35, 0 failures.
+
+**The rehearsal, on the final tree.** `rehearse.sh` (from a copy, `REPO` set, seed 20260822), five
+seats: the round ran ARMED to ENDING (the work order, a Revoke, a meeting through the gate at 5/5,
+discussion, vote and tally, Static, an Egress that resolved; the round ended on the first Egress, so
+the second never arrived, as in D-323 to D-328). `rehearse-check.py`: 21 of 21. No seat asked to be
+let go: a simulator's BLUETOOTH and NEARBY DEVICES read NOT ON THIS PHONE (D-314), so nothing in the
+lobby reads switched off, as before.
+
+**Not on a phone.** None of this has run on one, and the race cannot be staged on a simulator (no
+radio to switch off). Unverified until phones show it: how long an ask takes to be answered on a
+home's Wi-Fi; that a switch-off at the edge of LIGHTS OUT lands either way and never strands a seat.
+The phone session's checklist lobby lines now say the ask and its answer, and gain one for the edge.
+
+**Limits, reasoned and not observed:**
+
+1. **A guest whose socket drops and reseats between the house's RELEASED and its hang-up** is put back
+   on the desk by the reseat (`desk.seated`), and a LIGHTS OUT in that moment could arm it just as
+   the phone hangs up on RELEASED: D-327's case again, by a narrower road (a reconnect inside one
+   round trip). Not closed.
+2. **A house that never answers** leaves the phone in the lobby with the grant off; if the round
+   arms, it is named at the first meeting, as D-311's backstop does for every grant off at arming.
+
+**Decisions for the owner** (each provisional):
+
+1. **`LET_GO_PATIENCE_MILLIS` is 5 s**, and an unanswered ask is asked again by the next trigger,
+   never by a timer.
+2. **RELEASED always lets a guest go**, even if the grant is back on by then, because the house has
+   already taken its seat; with everything on, PROCEED takes it back in by its token.
+3. **The host asks its own house** over its loopback socket, as every phone does, and its seat is
+   never taken off the desk.
 
 ### D-330 · **The source re-scanned while its pattern is held restarts it with a fresh, different one; the stairs warning's hold reads UNREGISTER AND PROCEED; the strip's padlock shows for anything carried, a held pattern as a disk — built (recording 54)**
 

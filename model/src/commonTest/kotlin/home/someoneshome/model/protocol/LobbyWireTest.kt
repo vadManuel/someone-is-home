@@ -6,7 +6,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The lobby's five bodies, and the one property that matters about the set.
+ * The lobby's nine bodies, and the one property that matters about the set.
  *
  * Round-tripping and pinned discriminators for the reason [TransportFrameTest] pins the frames'.
  * The third test is the real one: **what the host sends down carries names and nothing else that
@@ -28,7 +28,11 @@ class LobbyWireTest {
         "houseClosed" to LobbyBody.HouseClosed,
         // **A refused name** (D-288): downward, to one phone, carrying nothing.
         "nameTaken" to LobbyBody.NameTaken,
-        // **What a phone can range** (D-301): upward, a number and nothing else.
+        // **A lobby let-go asks the house first** (D-329): upward, carrying nothing, and the two
+        // answers downward, carrying nothing.
+        "letGo" to LobbyBody.LetGo,
+        "released" to LobbyBody.Released,
+        "seatKept" to LobbyBody.SeatKept,
     )
 
     @Test
@@ -61,9 +65,28 @@ class LobbyWireTest {
             is LobbyBody.RoundEnded -> "roundEnded"
             is LobbyBody.HouseClosed -> "houseClosed"
             is LobbyBody.NameTaken -> "nameTaken"
+            is LobbyBody.LetGo -> "letGo"
+            is LobbyBody.Released -> "released"
+            is LobbyBody.SeatKept -> "seatKept"
         }
         for ((wireName, body) in everyBody) assertEquals(wireName, wireNameOf(body))
-        assertEquals(everyBody.size, 6, "a lobby body was added without pinning its discriminator")
+        assertEquals(everyBody.size, 9, "a lobby body was added without pinning its discriminator")
+    }
+
+    /**
+     * **The let-go is one body from every phone, and its two answers are one width** (D-329). The
+     * request carries nothing, so the same bytes go up whichever grant is off and whoever holds the
+     * phone; and the house's two answers are the same number of bytes, so the length of what comes
+     * down never says which it was. Pinned whole, byte for byte.
+     */
+    @Test
+    fun theLetGoCarriesNothingAndItsAnswersAreOneWidth() {
+        assertEquals("""{"type":"letGo"}""", LobbyWire.encode(LobbyBody.LetGo), "the let-go carries something")
+        val released = LobbyWire.encode(LobbyBody.Released)
+        val kept = LobbyWire.encode(LobbyBody.SeatKept)
+        assertEquals("""{"type":"released"}""", released)
+        assertEquals("""{"type":"seatKept"}""", kept)
+        assertEquals(released.length, kept.length, "the house's two answers to a let-go are not one width")
     }
 
     /**

@@ -25,6 +25,8 @@ import kotlinx.serialization.json.Json
  *   the names.
  * - [LobbyBody.RoundEnded], [LobbyBody.HouseClosed] and [LobbyBody.NameTaken] go **host → client**
  *   and carry nothing: each is a moment, and the whole message is that it arrived.
+ * - [LobbyBody.LetGo] goes **client → host** and [LobbyBody.Released] and [LobbyBody.SeatKept] come
+ *   back, each carrying nothing (D-329): a lobby let-go asks the house first.
  *
  * A single body with a nullable `line` would have been the obvious shape and it is exactly the
  * shape rule 3 forbids: a nulled field still exists, and someone makes it non-null later for an
@@ -254,6 +256,54 @@ sealed class LobbyBody {
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("nameTaken")
     data object NameTaken : LobbyBody()
+
+    /**
+     * **Client → host. Something this game needs is off on this phone, in the lobby: let it go?**
+     * (the owner's ruling, 2026-11-23, D-329: *"report this at the next meeting instead of kicking
+     * out a player"*).
+     *
+     * D-311 let a guest go from the lobby on its own phone's word: it hung up. But the house's
+     * arming pushes reach a phone one by one, so a lobby check answering REFUSED before the phone
+     * had heard any of them let go a seat the house had already armed (D-327's open item). The phone
+     * cannot know of an arming still in the air; the house can. So the phone asks, and does not
+     * leave until the house answers [Released] or [SeatKept].
+     *
+     * **It carries nothing**, so it is the same bytes from every phone, the host's included over its
+     * own loopback socket: what is off stays inside the phone (the owner's threat model), and the
+     * house's answer reads nothing but whether the seat is in an armed round.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("letGo")
+    data object LetGo : LobbyBody()
+
+    /**
+     * **Host → one client. No round holds this seat: it is let go** (D-329), the answer to [LetGo]
+     * when the house has not armed. The house has already taken the seat off its desk, under the
+     * round's own lock, so a LIGHTS OUT that follows cannot arm it; the phone then goes to
+     * PERMISSIONS as D-311 sends it. The host's own seat is answered the same and is not taken off
+     * (D-311's host rule: shown PERMISSIONS, the house still on the air).
+     *
+     * **[SeatKept]'s twin, one width**: `released` and `seatKept` are eight letters each, so the two
+     * answers are the same number of bytes (D-217's shape), whichever the house gives.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("released")
+    data object Released : LobbyBody()
+
+    /**
+     * **Host → one client. This seat is in the round the house armed, or is arming: it stays**
+     * (D-329), the answer to [LetGo]. Sent on the seat's own ordered queue after every arming push
+     * the house wrote it, so it reaches the phone in the round's order. The phone stays where it is,
+     * the arming walks it to ARMED, and the grant that was off is the round's: counted on its first
+     * beat as a switch-off (D-311) and named at the first meeting in the owner's sentence (D-310,
+     * D-311).
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("seatKept")
+    data object SeatKept : LobbyBody()
 }
 
 /**

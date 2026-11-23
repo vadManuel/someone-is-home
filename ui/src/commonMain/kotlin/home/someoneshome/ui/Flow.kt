@@ -2678,17 +2678,82 @@ class FlowModel(
      * No new words, light or screen: PERMISSIONS draws its rows and the gate's sentence as it always
      * has. No Nearby Interaction probe is started here (D-309); the one the lobby runs is
      * [cameBackToTheForeground]'s, and the screen's own refresh is the one it always ran on arrival.
+     *
+     * ### It asks the house first, and moves nothing until the house answers (D-329)
+     *
+     * The owner, 2026-11-23: *"report this at the next meeting instead of kicking out a player."* The
+     * house's arming pushes reach a phone one by one, so a check that ran before this phone had
+     * heard any of them let go a seat the house had already armed (D-327's open item). So this phone
+     * does not leave on its own word: it asks ([LobbyModel.askToBeLetGo]) and stays where it is.
+     * **The house answers in the round's order**: [LetGoAnswer.Released] when no round holds the seat
+     * (the walk above, [letGoAnswered]), and [LetGoAnswer.Kept] when it has armed or is arming, after
+     * every arming push it wrote this phone, so the phone stays in the round and the grant that was
+     * off is the round's switch-off, named at the first meeting. The host asks too, over its own
+     * loopback socket, and is answered the same; its seat is never taken off the desk.
+     *
+     * **[roundHeard] is still the fast path** (D-327): a phone that holds a push of a round is not
+     * [inTheLobby], so it asks nothing. **One ask at a time**: a check while an ask is waiting asks
+     * nothing more, until [LET_GO_PATIENCE_MILLIS] has passed with no answer; then the next trigger
+     * asks again. Nothing here leaves without the house's answer.
      */
     fun permissionsChecked() {
-        if (inTheLobby && perms.switchedOffNow().isNotEmpty()) {
-            if (lobby.hosting) {
-                hostHeldAtPermissions = true
-            } else {
-                lobby.leaveLobby()
-                roundForgotten()
+        if (inTheLobby && perms.switchedOffNow().isNotEmpty()) askTheHouseToLetGo()
+    }
+
+    /**
+     * **The ask, once per [LET_GO_PATIENCE_MILLIS]** (D-329), stamped on this phone's monotonic
+     * clock. No timer runs: an unanswered ask is asked again only by the next trigger, so a house
+     * that never answers leaves the phone where it is, and the round, if one arms, counts the grant
+     * off at its first beat as D-311 counts every grant off at arming.
+     */
+    private fun askTheHouseToLetGo() {
+        val now = monotonicNow()
+        val asked = letGoAskedAt
+        if (asked == null || now - asked >= LET_GO_PATIENCE_MILLIS) {
+            letGoAskedAt = now
+            lobby.askToBeLetGo(::letGoAnswered)
+        }
+    }
+
+    /** **When this phone last asked the house to let it go**, unanswered, or null (D-329). */
+    private var letGoAskedAt: Long? = null
+
+    /**
+     * **The house answered a let-go** (D-329).
+     *
+     * - **Kept**: the seat is in the round the house armed or is arming. Nothing moves here: the
+     *   arming's own pushes walk the phone to ARMED (D-234), and the grant that was off is the
+     *   round's, counted on its first beat as a switch-off (D-311) and named at the first meeting in
+     *   the owner's sentence (D-310, D-311).
+     * - **Released**: no round holds the seat, and D-311's walk follows. **A guest** leaves the lobby
+     *   as LEAVE does and lands on PERMISSIONS with the rows read in place; the house has already
+     *   taken its seat off the desk, so it leaves whenever it still holds the lobby seat, whatever
+     *   the grant reads by now (back on, PROCEED takes it back in by its token). **The host** is shown
+     *   PERMISSIONS with its house on the air, if it is still on its lobby with something off.
+     *
+     * A phone that has heard a round since it asked ([roundHeard]) is the round's, whatever the
+     * answer, and is not walked.
+     */
+    private fun letGoAnswered(answer: LetGoAnswer) {
+        letGoAskedAt = null
+        val stillTheLobbys = !roundHeard && !lobby.holdsARoundSeat
+        when (answer) {
+            LetGoAnswer.Kept -> Unit
+            LetGoAnswer.Released -> when {
+                !stillTheLobbys -> Unit
+                lobby.hosting -> if (inTheLobby && perms.switchedOffNow().isNotEmpty()) {
+                    hostHeldAtPermissions = true
+                    perms.readNow()
+                    push(ScreenId.Perms)
+                }
+                lobby.attached != null -> {
+                    lobby.leaveLobby()
+                    roundForgotten()
+                    perms.readNow()
+                    push(ScreenId.Perms)
+                }
+                else -> Unit
             }
-            perms.readNow()
-            push(ScreenId.Perms)
         }
     }
 
@@ -2710,8 +2775,9 @@ class FlowModel(
      * landing then must not let the seat go (D-311: *in the lobby, before lights out*); the switch-off
      * is the round's, counted on its first beat and named at the first meeting (D-310, D-311).
      *
-     * ⚠️ **It cannot see an arming whose first push has not yet arrived** (a frame still in the air
-     * when the probe answers). That narrower window is raised in D-327, not closed here.
+     * **It cannot see an arming whose first push has not yet arrived** (a frame still in the air
+     * when the probe answers), which D-327 raised. D-329 closes it at the house: the check asks, and
+     * the house answers in the round's order ([permissionsChecked]). This stays the fast path.
      */
     private var roundHeard = false
 
@@ -2914,6 +2980,8 @@ class FlowModel(
      */
     private fun roundForgotten() {
         roundHeard = false
+        // An ask made for the lobby this phone stood in is not one for the next (D-329).
+        letGoAskedAt = null
         selections.clear()
         meeting.meetingBegan()
         if (state.houseAttached) {
@@ -4825,6 +4893,16 @@ private const val MIN_CLOCK_MILLIS: Long = 16L
  * nowhere else.
  */
 private val LOBBY_SCREENS: Set<ScreenId> = setOf(ScreenId.Lobby, ScreenId.Secret)
+
+/**
+ * **How long a lobby let-go waits for the house before the next trigger asks again** (D-329,
+ * provisional, owner to confirm). The answer is one round trip on the home's Wi-Fi, behind at most
+ * an arming the house is writing, which is milliseconds; five seconds is many times that and still
+ * shorter than a person's walk back from Settings. Until it passes, a second check asks nothing
+ * more; after it, the next trigger asks again. **No timer reads it**: the phone never leaves without
+ * the house's answer, so a house that does not answer leaves the phone where it is.
+ */
+const val LET_GO_PATIENCE_MILLIS: Long = 5_000L
 
 /** **A playback frame's time on screen** (D-319): two seconds of history at 6×, a third of a second. */
 internal const val LAPSE_FRAME_MS: Long = 2_000L / 6

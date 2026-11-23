@@ -24,6 +24,9 @@ class ForeignBodyTest {
         LobbyBody.RoundEnded,
         LobbyBody.HouseClosed,
         LobbyBody.NameTaken,
+        LobbyBody.LetGo,
+        LobbyBody.Released,
+        LobbyBody.SeatKept,
     )
 
     private val round: List<RoundBody> = listOf(

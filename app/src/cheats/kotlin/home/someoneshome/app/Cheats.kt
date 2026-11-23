@@ -261,6 +261,9 @@ fun CheatRoot(uwb: Boolean) {
             // **The fourth: a phone saying its radio went down, and why** (T2, D-222; D-223). A
             // person's act is named to the room at the next meeting; a reset is recorded only.
             onRadioFaulted = doors::faulted,
+            // **And a lobby let-go, asked of the rules** (D-329): kept if the seat is in a round the
+            // house armed or is arming, released otherwise, under the lock an arming holds.
+            onLetGo = doors::letGo,
             round = seam,
             // **The host said the round is over** (D-157, E-R2-10). The transport has already reset
             // this phone's inbox by the time this runs; what is left is the screen answer, which is

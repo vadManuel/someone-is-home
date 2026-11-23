@@ -317,6 +317,26 @@ class RoundAuthority(
      */
     suspend fun arm(seed: Long): Boolean = turn.withLock { armWith(seed) }
 
+    /**
+     * **A lobby let-go, answered in the round's order** (the owner's ruling, 2026-11-23, D-329).
+     *
+     * True, **kept**, when [seat] is in a round this house has armed and not ended; false otherwise,
+     * and then [release] is run **here, under [turn]**, before the lock is let go. [arm] holds the
+     * same lock from reading the lobby's seats to the last of its pushes, so the two cannot overlap:
+     * an ask that reaches the lock first is released before the arming reads the desk, which then
+     * cannot arm it; an ask that waits behind an arming finds the seat armed and is kept, and the
+     * caller's answer goes on the seat's queue after every arming push (the queue is ordered, and
+     * those pushes were put on it under this lock).
+     *
+     * Not a rule: nothing is reduced, recorded or pushed. A seat kept is counted by the round as
+     * any grant off at arming is (D-311), by its phone's own first beat.
+     */
+    suspend fun letGo(seat: Seat, release: () -> Unit): Boolean = turn.withLock {
+        val kept = state.armed && !state.ended && state.seats.any { it.index == seat.index }
+        if (!kept) release()
+        kept
+    }
+
     private suspend fun armWith(seed: Long): Boolean {
         val inputs = inputs()
         if (!inputs.readyToArm) {

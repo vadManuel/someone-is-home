@@ -51,4 +51,14 @@ class HouseDoors(private val rules: () -> RoundAuthority?) {
     suspend fun faulted(seat: Seat, report: RoundBody.RadioFaulted) {
         rules()?.radioFaulted(seat, report.cause, report.onset)
     }
+
+    /**
+     * **A lobby let-go: kept if [seat] is in a round the house armed, released otherwise** (D-329),
+     * [RoundAuthority.letGo]. With no authority there is no round to hold it, so it is released.
+     */
+    suspend fun letGo(seat: Seat, release: () -> Unit): Boolean {
+        val authority = rules()
+        if (authority == null) release()
+        return authority?.letGo(seat, release) ?: false
+    }
 }

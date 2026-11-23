@@ -120,20 +120,33 @@ Tick each line as you see it.
       warning, and never closes the house; when both happen in one shift, that sentence comes
       first. (D-310, D-311)
 - [ ] In the lobby, before lights out, switch a permission off on a guest (Settings, or Bluetooth
-      in Control Centre) and come back: the guest leaves the lobby and lands on PERMISSIONS with
-      that row reading REFUSED, the host's count drops by one, and with it back on the guest
-      rejoins as usual. On the host: it is shown PERMISSIONS, the guests stay seated, and CONTINUE
-      takes it back to its lobby. (D-311) There is no once-a-second check any more (D-326): Bluetooth
-      turned off in Control Centre, without leaving the app, should let the guest go within a moment
-      of the switch, on the radio's own callback (`[perms] BLUETOOTH state=... THE RADIO IS OFF`).
-      If nothing happens until the guest leaves and comes back, note it: that is the finding.
+      in Control Centre) and come back: the guest's console logs `THIS PHONE ASKED THE HOUSE TO LET
+      IT GO (D-329)` and then `THE HOUSE ANSWERED THIS PHONE'S LET-GO — RELEASED`, the host's logs
+      `A SEAT ASKED TO BE LET GO — RELEASED`, and only then does the guest leave the lobby and land
+      on PERMISSIONS with that row reading REFUSED; the host's count drops by one, and with it back
+      on the guest rejoins as usual. Note how long the ask took to be answered: it should be well
+      under a second. On the host: it asks its own house the same way, is shown PERMISSIONS, the
+      guests stay seated, and PROCEED takes it back to its lobby. (D-311, D-329) There is no
+      once-a-second check any more (D-326): Bluetooth turned off in Control Centre, without leaving
+      the app, should start the ask within a moment of the switch, on the radio's own callback
+      (`[perms] BLUETOOTH state=... THE RADIO IS OFF`). If nothing happens until the guest leaves
+      and comes back, note it: that is the finding.
 - [ ] In the lobby, switch NEARBY DEVICES off in Settings on a guest and come back: the console logs
-      `[perms] NEARBY DEVICES — PROBED AGAIN ON A RETURN TO THE LOBBY (D-326)`, and the guest lands
-      on PERMISSIONS with NEARBY DEVICES reading REFUSED. On the host, it is shown PERMISSIONS and
-      the guests stay seated. Note what the probe answered (`[perms] NEARBY DEVICES probe: ...`): if
-      it says `no answer` and the guest stays (`ASKED IS NO ANSWER, THE ROW STAYS`), the switch-off
-      is heard only at lights out, and that is the finding. With NEARBY DEVICES left on, leave the
-      app and come back several times: the guest is never let go. (D-326)
+      `[perms] NEARBY DEVICES — PROBED AGAIN ON A RETURN TO THE LOBBY (D-326)`, the ask and its
+      RELEASED answer as above (D-329), and the guest lands on PERMISSIONS with NEARBY DEVICES
+      reading REFUSED. On the host, it is shown PERMISSIONS and the guests stay seated. Note what
+      the probe answered (`[perms] NEARBY DEVICES probe: ...`): if it says `no answer` and the guest
+      stays (`ASKED IS NO ANSWER, THE ROW STAYS`), the switch-off is heard only at lights out, and
+      that is the finding. With NEARBY DEVICES left on, leave the app and come back several times:
+      the guest is never let go, and asks nothing. (D-326)
+- [ ] **At the edge of lights out** *(D-329)*: on a guest, switch Bluetooth off in Control Centre
+      at the same moment the host completes the LIGHTS OUT hold (a second person on each phone).
+      Whichever way it falls, the guest is never left on PERMISSIONS holding a seat the round has:
+      either its console says `RELEASED` and it was not armed (the round has one seat fewer, and it
+      is sent no work order), or the host's console says `A SEAT ASKED TO BE LET GO — KEPT, IT IS IN
+      THE ROUND` and the guest goes to PERIMETER ARMED with everyone else; then the first meeting's
+      notice names it in the permission sentence. Hard to hit by hand; try a few times, and note
+      which answer each try got.
 - [ ] Mid-round, turn Bluetooth off in Control Centre (do not leave the app). At the next meeting
       the notice names that phone in the permission sentence, not "was unreachable". Note whether
       the console logs `[perms] BLUETOOTH state=... THE RADIO IS OFF (D-311)` and the radio's

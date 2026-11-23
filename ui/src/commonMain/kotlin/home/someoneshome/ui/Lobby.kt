@@ -253,6 +253,31 @@ interface LobbyLink {
      * held at PERMISSIONS. False by default, for a link with no round behind it.
      */
     fun holdsARoundSeat(): Boolean = false
+
+    /**
+     * **Something this game needs is off, in the lobby: ask the house to let this phone go** (the
+     * owner's ruling, 2026-11-23, D-329). The house answers [LetGoAnswer.Released] when no round
+     * holds the seat (it has taken it off its desk already) and [LetGoAnswer.Kept] when the seat is
+     * in a round it armed or is arming, after every arming push it wrote this phone. [answered] is
+     * called once, with the house's answer, or never if the house does not answer; the flow asks
+     * again on the next trigger (`LET_GO_PATIENCE_MILLIS`) and never leaves without an answer.
+     *
+     * **A link with no house behind it answers [LetGoAnswer.Released] at once**: nothing there can
+     * arm a round, so no round can hold the seat, and every render and fixture keeps D-311's walk.
+     */
+    fun askToBeLetGo(answered: (LetGoAnswer) -> Unit) = answered(LetGoAnswer.Released)
+}
+
+/**
+ * **The house's answer to a lobby let-go** (D-329), as far as `ui` knows it: `LobbyBody.Released`
+ * and `LobbyBody.SeatKept` on the wire.
+ */
+enum class LetGoAnswer {
+    /** No round holds this seat: the phone goes to PERMISSIONS as D-311 sends it. */
+    Released,
+
+    /** The seat is in the round the house armed or is arming: the phone stays, and the round counts the switch-off. */
+    Kept,
 }
 
 /**
@@ -478,6 +503,37 @@ class MemoryLobbyLink(
     }
 
     private fun publish() = listener(standing)
+
+    /**
+     * **How many times this phone asked the house to let it go** (D-329), for a test to count.
+     * Test-facing.
+     */
+    var letGoAsks: Int = 0
+        private set
+
+    /**
+     * **Whether the fixture's house holds its answer** (D-329): false answers at once with
+     * [letGoAnswer], which is a desk that has armed nothing; true keeps every ask unanswered until a
+     * test calls [answerLetGo], standing for a frame still in the air or a house that never answers.
+     */
+    var holdsLetGo: Boolean = false
+
+    /** What the fixture's house answers a let-go with, when it answers at once. */
+    var letGoAnswer: LetGoAnswer = LetGoAnswer.Released
+
+    private var letGoWaiting: ((LetGoAnswer) -> Unit)? = null
+
+    override fun askToBeLetGo(answered: (LetGoAnswer) -> Unit) {
+        letGoAsks++
+        if (holdsLetGo) letGoWaiting = answered else answered(letGoAnswer)
+    }
+
+    /** **The house's held answer arrives** (D-329): to the last ask, once. */
+    fun answerLetGo(answer: LetGoAnswer) {
+        val waiting = letGoWaiting ?: error("no let-go is waiting for an answer")
+        letGoWaiting = null
+        waiting(answer)
+    }
 
     /**
      * One entry per seat, blanks for the seats nobody has spoken for — the invariant
@@ -773,6 +829,9 @@ class LobbyModel(
      * link keeps it ([LobbyLink.holdsARoundSeat]). Asked fresh: a round's ending forgets it.
      */
     val holdsARoundSeat: Boolean get() = link.holdsARoundSeat()
+
+    /** **Ask the house to let this phone go** (D-329), through the link: see [LobbyLink.askToBeLetGo]. */
+    fun askToBeLetGo(answered: (LetGoAnswer) -> Unit) = link.askToBeLetGo(answered)
 
     /** The last refusal, in the player's own words, or none. Cleared by the next thing they do. */
     var refusal: String? by mutableStateOf(null)

@@ -68,6 +68,7 @@ class LobbyLoopbackTest {
                     }
                     // Every downward body is the host's to send, never to receive.
                     is LobbyBody.Standing, is LobbyBody.RoundEnded, is LobbyBody.HouseClosed, is LobbyBody.NameTaken,
+                    is LobbyBody.LetGo, is LobbyBody.Released, is LobbyBody.SeatKept,
                     null,
                     -> Unit
                 }

@@ -188,6 +188,7 @@ class RoundEndedPushTest {
                     is LobbyBody.Naming -> acted.trySend("naming")
                     is LobbyBody.Handover -> acted.trySend("handover")
                     is LobbyBody.Standing, is LobbyBody.RoundEnded, is LobbyBody.HouseClosed, is LobbyBody.NameTaken,
+                    is LobbyBody.LetGo, is LobbyBody.Released, is LobbyBody.SeatKept,
                     null,
                     -> Unit
                 }

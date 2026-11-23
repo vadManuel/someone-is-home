@@ -102,6 +102,11 @@ class LineWatch(private val note: (String) -> Unit) {
             is LobbyBody.HouseClosed -> "HOUSE CLOSED"
             // A refused name (D-288): downward, to one phone, carrying nothing.
             is LobbyBody.NameTaken -> "NAME TAKEN"
+            // A lobby let-go asks the house first (D-329): the request upward, the two answers
+            // downward to one phone, each carrying nothing.
+            is LobbyBody.LetGo -> "LET GO"
+            is LobbyBody.Released -> "RELEASED"
+            is LobbyBody.SeatKept -> "SEAT KEPT"
             // **A round body is not an undecodable one**, and telling them apart is the difference
             // between a probe and an alarm nobody reads. This class was written when the lobby's
             // socket carried only the lobby; it carries the round now, and on its first five-seat
@@ -148,10 +153,11 @@ class LineWatch(private val note: (String) -> Unit) {
 
     private companion object {
         /**
-         * **The four kinds a client is supposed to receive**, named in one place so the alarm's
-         * condition reads as a membership test rather than as a chain of inequalities somebody has
-         * to add a clause to. Everything outside this set is shouted about on arrival.
+         * **The kinds a client is supposed to receive** (the house's two answers to a let-go among
+         * them, D-329), named in one place so the alarm's condition reads as a membership test
+         * rather than as a chain of inequalities somebody has to add a clause to. Everything outside
+         * this set is shouted about on arrival.
          */
-        val QUIET: Set<String> = setOf("STANDING", "ROUND", "ROUND ENDED", "HOUSE CLOSED")
+        val QUIET: Set<String> = setOf("STANDING", "ROUND", "ROUND ENDED", "HOUSE CLOSED", "RELEASED", "SEAT KEPT")
     }
 }

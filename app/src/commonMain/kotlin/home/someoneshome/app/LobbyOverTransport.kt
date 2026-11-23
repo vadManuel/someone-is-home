@@ -44,6 +44,7 @@ import home.someoneshome.platform.transport.TransportClient
 import home.someoneshome.platform.transport.TransportHost
 import home.someoneshome.ui.HomeFinder
 import home.someoneshome.ui.HostRefusal
+import home.someoneshome.ui.LetGoAnswer
 import home.someoneshome.ui.LobbyLink
 import home.someoneshome.ui.NearbyHome
 import kotlinx.coroutines.CoroutineScope
@@ -377,6 +378,14 @@ class LobbyHouse(
      * the empty frame, the fail-closed direction.
      */
     private val onMapped: suspend (Seat) -> String? = { null },
+    /**
+     * **A phone asked to be let go from the lobby** ([LobbyBody.LetGo], D-329): true when its seat
+     * is in a round the authority armed or is arming (kept), false when it is not, and then the
+     * release it is handed has been run under the authority's own lock (`RoundAuthority.letGo`).
+     * [HouseDoors.letGo] in production. **The default is a house with no authority**, which can arm
+     * nothing: every ask is released.
+     */
+    private val onLetGo: suspend (Seat, () -> Unit) -> Boolean = { _, release -> release(); false },
 ) {
 
     private val desk = LobbyDesk()
@@ -570,6 +579,12 @@ class LobbyHouse(
 
         /** **A phone's radio went down** ([RoundBody.RadioFaulted], T2, D-222; D-223). On the ordered queue. */
         data class RadioFaulted(val seat: Seat, val report: RoundBody.RadioFaulted) : Arrival
+
+        /**
+         * **A phone asked to be let go from the lobby** ([LobbyBody.LetGo], D-329). On the ordered
+         * queue, so it reaches the authority after everything that phone sent before it.
+         */
+        data class LetGo(val seat: Seat) : Arrival
     }
 
     private val arriving = Channel<Arrival>(Channel.UNLIMITED)
@@ -1087,7 +1102,52 @@ class LobbyHouse(
                     onRadioFaulted(arrival.seat, arrival.report)
                     answerFault(arrival.seat, arrival.report.onset)
                 }
+                // **A lobby let-go, asked of the authority and answered in the round's order**
+                // (D-329). See [letGo].
+                is Arrival.LetGo -> letGo(arrival.seat)
             }
+        }
+    }
+
+    /**
+     * **A phone asked to be let go from the lobby** (the owner's ruling, 2026-11-23, D-329: *"report
+     * this at the next meeting instead of kicking out a player"*).
+     *
+     * The authority answers under its own lock ([onLetGo], `RoundAuthority.letGo`), the lock an
+     * arming holds from reading the desk to its last push:
+     *
+     * - **Not armed: released.** The seat comes off the desk there and then, under that lock, so a
+     *   LIGHTS OUT that follows reads a desk without it and cannot arm it; the standing goes out. The
+     *   phone, told [LobbyBody.Released], goes to PERMISSIONS and hangs up as D-311 has it. **The
+     *   host's own seat is never taken off** (D-311's host rule: it is shown PERMISSIONS and its house
+     *   stays on the air), and is answered the same.
+     * - **Armed, or arming: kept.** Nothing changes at the house; [LobbyBody.SeatKept] goes on the
+     *   seat's ordered queue behind every arming push the house wrote it, so the phone hears the round
+     *   first. The grant that was off is the round's, counted by that phone's first beat.
+     *
+     * One answer to every ask, one width either way (`released`, `seatKept`). A phone gone by now
+     * misses it, and asks again on its next check.
+     */
+    private suspend fun letGo(seat: Seat) {
+        val server = host ?: return
+        val kept = onLetGo(seat) {
+            if (hostSeat?.index != seat.index) {
+                deskWatch()
+                desk.left(seat)
+                publish()
+            }
+        }
+        onEvent(
+            if (kept) "A SEAT ASKED TO BE LET GO — KEPT, IT IS IN THE ROUND · ITS SWITCH-OFF IS NAMED AT THE FIRST MEETING · SEAT ${seat.index}"
+            else "A SEAT ASKED TO BE LET GO — RELEASED, NO ROUND HOLDS IT · SEAT ${seat.index}",
+        )
+        val answer = TransportFrame.Carry(LobbyWire.encode(if (kept) LobbyBody.SeatKept else LobbyBody.Released))
+        try {
+            server.send(seat, answer)
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            onEvent("A LET-GO COULD NOT BE ANSWERED — SEAT ${seat.index} · IT ASKS AGAIN ON ITS NEXT CHECK")
         }
     }
 
@@ -1175,6 +1235,11 @@ class LobbyHouse(
             is LobbyBody.HouseClosed -> Unit
             // The house's to send, to one phone, never to receive (D-288).
             is LobbyBody.NameTaken -> Unit
+            // **A phone asking to be let go** (D-329), onto the ordered queue: the authority answers.
+            is LobbyBody.LetGo -> arriving.trySend(Arrival.LetGo(seat))
+            // The house's two answers, to send and never to receive (D-329). A client that sent one
+            // would be telling the house what it decided.
+            is LobbyBody.Released, is LobbyBody.SeatKept -> Unit
         }
     }
 
@@ -1551,6 +1616,8 @@ class LobbyOverTransport(
     private val houseMillis: () -> Long = ::monotonicMillis,
     /** [LobbyHouse.onMapped], threaded through: what each phone may draw of the map this beat (D-316). */
     private val onMapped: suspend (Seat) -> String? = { null },
+    /** [LobbyHouse.onLetGo], threaded through: a lobby let-go, asked of the authority (D-329). */
+    private val onLetGo: suspend (Seat, () -> Unit) -> Boolean = { _, release -> release(); false },
 ) : LobbyLink {
 
     /**
@@ -1585,7 +1652,7 @@ class LobbyOverTransport(
      * at all. `emit` and `armingInputs` are what it is reached for, and both are the authority's
      * own calls rather than a screen's.
      */
-    internal val house = LobbyHouse(scope, onEvent, onIntent, onEgressFired, onCardRead, onSighted, onRadioFaulted, advertising, houseMillis, onMapped)
+    internal val house = LobbyHouse(scope, onEvent, onIntent, onEgressFired, onCardRead, onSighted, onRadioFaulted, advertising, houseMillis, onMapped, onLetGo)
     private var session: ClientSession? = null
     private var client: TransportClient? = null
     private var clientJob: Job? = null
@@ -1739,6 +1806,12 @@ class LobbyOverTransport(
                         hangUp()
                         onNameTaken()
                     }
+                    // **The house's answer to this phone's let-go** (D-329), to the flow that asked.
+                    // What it does with it is a screen answer, the flow's; nothing here hangs up.
+                    is LobbyBody.Released -> letGoAnswered(LetGoAnswer.Released)
+                    is LobbyBody.SeatKept -> letGoAnswered(LetGoAnswer.Kept)
+                    // Upward only (D-329): a let-go reaching a client would be one phone asking another.
+                    is LobbyBody.LetGo -> Unit
                     // Either upward body arriving at a client would be the house sending one
                     // phone's text to another, which nothing on the host side does — and if it ever
                     // did, ignoring it here is the fail-closed direction.
@@ -2000,6 +2073,34 @@ class LobbyOverTransport(
     }
 
     /**
+     * **Ask the house to let this phone go** (D-329): [LobbyBody.LetGo] up this phone's one socket,
+     * the host's own over loopback like everybody's, and [answered] is kept for the house's answer.
+     * A later ask replaces it; any answer goes to the one kept, once. A phone with no client asks
+     * nobody and is answered by nobody, so it stays where it is and asks again on its next check.
+     * The ask carries nothing, and nothing about what is off is logged here or sent.
+     */
+    override fun askToBeLetGo(answered: (LetGoAnswer) -> Unit) {
+        letGoWaiting = answered
+        val live = client
+        if (live == null) {
+            onEvent("A LET-GO WAS NOT ASKED — NOT CONNECTED · ASKED AGAIN ON THE NEXT CHECK (D-329)")
+        } else {
+            onEvent("THIS PHONE ASKED THE HOUSE TO LET IT GO (D-329)")
+            scope.launch { live.send(TransportFrame.Carry(LobbyWire.encode(LobbyBody.LetGo))) }
+        }
+    }
+
+    /** **The flow waiting on the house's answer to a let-go** (D-329), or null. */
+    private var letGoWaiting: ((LetGoAnswer) -> Unit)? = null
+
+    private fun letGoAnswered(answer: LetGoAnswer) {
+        val waiting = letGoWaiting
+        letGoWaiting = null
+        onEvent("THE HOUSE ANSWERED THIS PHONE'S LET-GO — ${answer.name.uppercase()}")
+        waiting?.invoke(answer)
+    }
+
+    /**
      * **CLOSE THE HOUSE — and every other phone is told before the sockets go** (E-PAY-6).
      *
      * [leave] and this do the same three things to *this* phone. What this adds is the broadcast,
@@ -2099,6 +2200,8 @@ class LobbyOverTransport(
         // A phone that walked out holds no house's round: the next house it joins is taken as it is.
         houseRound = null
         lineOwed = false
+        // A phone that walked out is waiting on no answer from the house it left (D-329).
+        letGoWaiting = null
         clientJob?.cancel()
         clientJob = null
         client = null

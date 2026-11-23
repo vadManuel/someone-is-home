@@ -1,9 +1,11 @@
 package home.someoneshome.app
 
+import home.someoneshome.core.insidersFor
 import home.someoneshome.model.Event
 import home.someoneshome.model.Intent
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.RadioCause
+import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.LobbyBody
 import home.someoneshome.model.protocol.LobbyWire
@@ -25,6 +27,7 @@ import home.someoneshome.platform.transport.AdvertiseFailure
 import home.someoneshome.ui.Flow
 import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.HOUSE_IS_CLOSED
+import home.someoneshome.ui.LET_GO_PATIENCE_MILLIS
 import home.someoneshome.ui.LobbyModel
 import home.someoneshome.ui.NearbyHome
 import home.someoneshome.ui.PanelState
@@ -33,6 +36,7 @@ import home.someoneshome.ui.PermsModel
 import home.someoneshome.ui.SWITCHED_OFF_AGAIN
 import home.someoneshome.ui.SavedHomesModel
 import home.someoneshome.ui.ScreenId
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -44,6 +48,7 @@ import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -154,6 +159,11 @@ class PermissionCloseLoopbackTest {
         /** Beside the seat token, as `DeviceSeat` is on a phone: the link's token and the round's record, one store. */
         val store: SeatStore = MemorySeat(),
         screen: ScreenId = ScreenId.Lobby,
+        /**
+         * **The house's let-go door** (D-329), as `CheatRoot` wires it: [HouseDoors.letGo]. Only the
+         * host's phone runs a house, so only its door is ever asked; a test may put a door in front.
+         */
+        letGo: suspend (Seat, () -> Unit) -> Boolean = HouseDoors(house)::letGo,
     ) {
         val job = Job(parent.coroutineContext[Job])
         private val scope = CoroutineScope(parent.coroutineContext + job)
@@ -168,12 +178,15 @@ class PermissionCloseLoopbackTest {
 
         /** Every lobby body this phone was sent, decoded. */
         val lobbyBodies = mutableListOf<LobbyBody>()
+        /** Every body this phone was sent, raw and in the order it arrived, lobby and round alike. */
+        val inbound = mutableListOf<String>()
         private var answer: () -> Unit = {}
         val link = LobbyOverTransport(
             scope, onEvent = { log += it },
-            onInbound = { body -> LobbyWire.decodeOrNull(body)?.let { lobbyBodies += it } },
+            onInbound = { body -> inbound += body; LobbyWire.decodeOrNull(body)?.let { lobbyBodies += it } },
             seat = store,
             onRadioFaulted = HouseDoors(house)::faulted,
+            onLetGo = letGo,
             round = half, wake = wake, advertising = air,
             // `CheatRoot`'s wiring: the house's `RoundEnded` is answered by the panel's NEW ROUND.
             onRoundEnded = { answer() },
@@ -237,14 +250,19 @@ class PermissionCloseLoopbackTest {
         val port: Int get() = host.air.ports.last()
     }
 
-    private fun evening(body: suspend CoroutineScope.(Room) -> Unit) = runBlocking {
+    /** The house's real let-go door, and what a test may stand in front of it (D-329). */
+    private fun interface Door {
+        fun around(real: suspend (Seat, () -> Unit) -> Boolean): suspend (Seat, () -> Unit) -> Boolean
+    }
+
+    private fun evening(door: Door = Door { it }, body: suspend CoroutineScope.(Room) -> Unit) = runBlocking {
         val job = SupervisorJob(coroutineContext[Job])
         val scope = CoroutineScope(coroutineContext + job)
         val phones = mutableListOf<Phone>()
         try {
             scope.async {
                 var authority: RoundAuthority? = null
-                val host = Phone(scope, "HOST", { authority }).also { phones += it }
+                val host = Phone(scope, "HOST", { authority }, letGo = door.around(HouseDoors { authority }::letGo)).also { phones += it }
                 val said = mutableListOf<String>()
                 authority = RoundAuthority(
                     inputs = { host.link.house.armingInputs() },
@@ -445,17 +463,24 @@ class PermissionCloseLoopbackTest {
     }
 
     /**
-     * **GUARD (D-311): in the lobby, a guest that switches the Bluetooth radio off leaves and lands on
-     * PERMISSIONS, and the round armed at LIGHTS OUT does not hold it**, over real sockets. Dani's
-     * radio goes off before lights out: its phone's check lets it go (it hangs up, the row reads
-     * REFUSED), the host's standing drops to three, the house arms the three still seated, and Dani's
-     * phone is sent no seed.
+     * **GUARD (D-311, D-329): in the lobby, a guest that switches the Bluetooth radio off asks the
+     * house, is released, leaves and lands on PERMISSIONS, and the round armed at LIGHTS OUT does not
+     * hold it**, over real sockets. Dani's radio goes off before lights out: its phone's check asks
+     * and moves nothing on its own word; the house, armed with nothing, takes the seat off its desk
+     * and answers RELEASED; the phone hangs up and the row reads REFUSED, the host's standing drops
+     * to three, the house arms the three still seated, and Dani's phone is sent no seed.
      */
     @Test
     fun aGuestSwitchingOffInTheLobbyLeavesItAndIsNotInTheRound() = evening { room ->
         val dani = room.guests[2]
         dani.os[DevicePermission.Bluetooth] = Grant.Refused
         dani.flow.permissionsChecked()
+        // Asked, and not gone: nothing has answered yet on this one thread.
+        assertEquals(ScreenId.Lobby, dani.flow.state.screen, "Dani left the lobby on its own word, before the house answered")
+        assertTrue(dani.model.attached != null, "Dani let its seat go before the house answered")
+        until("the house answered Dani's let-go") { dani.lobbyBodies.any { it is LobbyBody.Released } }
+        assertTrue(room.host.log.any { it.startsWith("A SEAT ASKED TO BE LET GO — RELEASED") }, "the house's log did not say released: ${room.host.log}")
+        until("Dani was walked to PERMISSIONS") { dani.flow.state.screen == ScreenId.Perms }
         assertEquals(ScreenId.Perms, dani.flow.state.screen, "Dani was not walked to PERMISSIONS")
         assertEquals(Grant.Refused, dani.flow.perms.grant(DevicePermission.Bluetooth), "the row does not show as refused")
         assertEquals(null, dani.model.attached, "Dani still holds the lobby")
@@ -502,6 +527,180 @@ class PermissionCloseLoopbackTest {
         assertEquals(listOf(RadioCause.Permission), relaunched.half.reports.map { it.cause }.distinct(), "the trip to Settings went up as something else")
         room.meeting()
         room.assertLastNotice(emptyList(), listOf(seat), words = warning("MIA"))
+    }
+
+    /**
+     * **Every frame the house writes to [held]'s seats waits until [gate] opens** (D-329): the arming's
+     * pushes still in the air when the phone's own check runs. The house has written them, in order,
+     * onto each seat's queue; the phone has heard none of them.
+     */
+    private fun Room.holdWrites(held: List<Phone>, gate: CompletableDeferred<Unit>) {
+        val named = host.link.house.armingInputs().names
+        val seats = held.map { p -> named.single { it.name == p.name }.seat.index }.toSet()
+        host.link.house.socketWrite = { seat, write ->
+            if (seat.index in seats) gate.await()
+            write()
+        }
+    }
+
+    private fun Phone.toldKept(): List<String> = inbound.filter { LobbyWire.decodeOrNull(it) is LobbyBody.SeatKept }
+
+    private fun Room.keptAnswers(): Int = host.log.count { it.startsWith("A SEAT ASKED TO BE LET GO — KEPT") }
+
+    /**
+     * **GUARD (the owner's ruling, 2026-11-23, D-329): a refused check racing the arming keeps the
+     * seat, the phone stays in the round, and the switch-off is named at the first meeting**, over
+     * real sockets, for an Insider's phone and a Resident's. The house arms all four seats while every
+     * frame to the guests is still in the air, so no guest has heard a push; an Insider guest and a
+     * Resident guest then find BLUETOOTH refused in the lobby. Each asks and stays: the house, armed,
+     * answers KEPT behind its arming pushes. Let through, each phone hears the arming first and the
+     * answer after it, is walked to ARMED with its seat, and its first beat reports the grant off as
+     * a switch-off; the first meeting names both in the owner's permission sentence, the same bytes
+     * on every phone. The two phones were told the same bytes and stood on the same screens.
+     */
+    @Test
+    fun aRefusedCheckRacingTheArmingKeepsTheSeatAndIsNamedAtTheFirstMeeting() = evening { room ->
+        val gate = CompletableDeferred<Unit>()
+        room.holdWrites(room.guests, gate)
+        // A seed whose draw puts an Insider among the guests, found by the draw itself, so the race
+        // is run on an Insider's phone and a Resident's whatever the house's seats come to.
+        val lobby = room.host.link.house.armingInputs()
+        val hostSeat = lobby.names.single { it.name == room.host.name }.seat.index
+        val seed = generateSequence(SEED) { it + 1 }.first { s ->
+            insidersFor(s, lobby.seats, lobby.chosenInsiders).any { it.index != hostSeat }
+        }
+        assertTrue(armAtLightsOut(room.house, hosting = true, seed = seed, note = { room.said += it }), "the round never armed: ${room.said}")
+        assertEquals(4, room.house.state.seats.size, "the round did not arm every seat")
+        val insider = assertNotNull(room.guests.firstOrNull { room.house.state.roleOf(room.seatOf(it)) == Role.Insider }, "the seed drew no Insider among the guests")
+        val resident = assertNotNull(room.guests.firstOrNull { room.house.state.roleOf(room.seatOf(it)) == Role.Resident }, "the seed drew no Resident among the guests")
+        val racing = listOf(insider, resident)
+        for (p in racing) {
+            assertTrue(p.half.pushedRaw.isEmpty(), "${p.name} heard the arming before its check: the race was not run")
+            assertEquals(ScreenId.Lobby, p.flow.state.screen)
+            p.os[DevicePermission.Bluetooth] = Grant.Refused
+            p.flow.permissionsChecked()
+            assertTrue(
+                p.model.attached != null && p.flow.state.screen == ScreenId.Lobby,
+                "${p.name} (${room.house.state.roleOf(room.seatOf(p))}) let a seat the house had armed go on its own word: on ${p.flow.state.screen}",
+            )
+        }
+        until("the house answered both asks") { room.keptAnswers() == 2 }
+        for (p in racing) {
+            assertEquals(ScreenId.Lobby, p.flow.state.screen, "${p.name} (${room.house.state.roleOf(room.seatOf(p))}) left the lobby before the house's answer reached it")
+            assertTrue(p.model.attached != null, "${p.name} let an armed seat go")
+        }
+        assertEquals(4, room.house.state.seats.size, "the round lost a seat to a lobby let-go")
+
+        gate.complete(Unit)
+        until("both racing phones were walked to ARMED and told KEPT") {
+            racing.all { p -> p.flow.state.screen == ScreenId.Armed && p.toldKept().isNotEmpty() }
+        }
+        for (p in racing) {
+            val kept = p.inbound.indexOfFirst { LobbyWire.decodeOrNull(it) is LobbyBody.SeatKept }
+            val opening = p.inbound.indexOfFirst { (RoundWire.decodeOrNull(it) as? RoundBody.Push)?.message is RoundMessage.OpeningMessage }
+            assertTrue(opening in 0 until kept, "${p.name} was answered ahead of the arming: the opening at $opening, KEPT at $kept")
+            assertTrue(p.model.attached != null, "${p.name} let its seat go on KEPT")
+            assertTrue(p.lobbyBodies.none { it is LobbyBody.Released }, "${p.name} was told RELEASED")
+        }
+        // Parity: one answer, the same bytes, and the same screen on the Insider's phone and the Resident's.
+        assertEquals(insider.toldKept(), resident.toldKept(), "the Insider's phone and the Resident's were told different bytes")
+        assertEquals(1, insider.toldKept().size, "a phone was told KEPT more than once")
+
+        until("every phone holds the round's seed") { room.all.all { it.half.round.uploading } }
+        room.all.forEach { it.flow.push(ScreenId.Home) }
+        room.beatUntil("the house listed both switch-offs") {
+            racing.all { p -> room.house.state.switchedOff.any { it.index == room.seatOf(p).index } }
+        }
+        for (p in racing) {
+            assertEquals(listOf(RadioCause.Permission), p.half.reports.map { it.cause }, "${p.name}'s grant off at arming went up as something else, or twice")
+        }
+        room.meeting()
+        val named = racing.sortedBy { room.seatOf(it).index }
+        room.assertLastNotice(
+            emptyList(), named.map { room.seatOf(it) },
+            words = "Residents ${named[0].name} and ${named[1].name} switched off a permission this game needs. " +
+                "If anyone switches one off again, the house closes and everyone starts over.",
+        )
+        assertEquals(insider.flow.state.screen, resident.flow.state.screen, "the Insider's phone and the Resident's stand on different screens")
+    }
+
+    /**
+     * **GUARD (D-311's host rule, D-329): the host asks its own house too, over its own loopback
+     * socket.** Before arming it is answered RELEASED and shown PERMISSIONS, its house on the air and
+     * every seat, its own included, still on the desk; back on, PROCEED takes it to its lobby. Racing
+     * its own arming, it is answered KEPT behind the arming's pushes, walked to ARMED, and its grant
+     * off is a switch-off named at the first meeting.
+     */
+    @Test
+    fun theHostRequestsALetGoOfItsOwnHouseAndFollowsTheHostRule() = evening { room ->
+        val host = room.host
+        host.os[DevicePermission.Camera] = Grant.Refused
+        host.flow.permissionsChecked()
+        assertEquals(ScreenId.Lobby, host.flow.state.screen, "the host moved before its house answered")
+        until("the host was shown PERMISSIONS") { host.flow.state.screen == ScreenId.Perms }
+        assertTrue(host.lobbyBodies.any { it is LobbyBody.Released }, "the host was not answered RELEASED")
+        assertTrue(host.model.hosting, "the host's house went off the air")
+        delay(SETTLE_MILLIS)
+        assertEquals(4, host.link.house.armingInputs().seats.size, "the house took a seat off its desk for the host's let-go")
+        assertEquals(4, host.model.standing.joined, "the host's let-go cost the lobby a seat")
+        host.os[DevicePermission.Camera] = Grant.Granted
+        host.flow.permissionsDone()
+        assertEquals(ScreenId.Lobby, host.flow.state.screen, "the host's PROCEED did not go back to its lobby")
+
+        val gate = CompletableDeferred<Unit>()
+        room.holdWrites(listOf(host), gate)
+        assertTrue(armAtLightsOut(room.house, hosting = true, seed = SEED, note = { room.said += it }), "the round never armed: ${room.said}")
+        host.os[DevicePermission.Motion] = Grant.Refused
+        host.flow.permissionsChecked()
+        until("the house kept the host's seat") { room.keptAnswers() == 1 }
+        assertEquals(ScreenId.Lobby, host.flow.state.screen, "the host was shown PERMISSIONS while its house armed it")
+        gate.complete(Unit)
+        until("the host was walked to ARMED and told KEPT") { host.flow.state.screen == ScreenId.Armed && host.toldKept().isNotEmpty() }
+        until("every phone holds the round's seed") { room.all.all { it.half.round.uploading } }
+        room.all.forEach { it.flow.push(ScreenId.Home) }
+        room.beatUntil("the house listed the host's switch-off") {
+            room.house.state.switchedOff.any { it.index == room.seatOf(host).index }
+        }
+        room.meeting()
+        room.assertLastNotice(emptyList(), listOf(room.seatOf(host)), words = warning("HOST"))
+    }
+
+    /**
+     * **GUARD (D-329): a house that does not answer leaves the phone where it is, the next trigger
+     * after [LET_GO_PATIENCE_MILLIS] asks again, and the phone never leaves without an answer**, over
+     * real sockets. The house's door is held shut. Mia asks once, and the triggers that follow within
+     * the patience ask nothing more; she stays in the lobby, seated, the desk still counting her. Past
+     * the patience, the next trigger asks again. The door opens: the house answers, RELEASED, and only
+     * then is she walked to PERMISSIONS and off the desk.
+     */
+    @Test
+    fun aHouseThatDoesNotAnswerLeavesThePhoneWhereItIsAndTheNextTriggerAsksAgain() {
+        val gate = CompletableDeferred<Unit>()
+        val heard = mutableListOf<Seat>()
+        evening(door = Door { real -> { seat, release -> heard += seat; gate.await(); real(seat, release) } }) { room ->
+            val mia = room.guests[0]
+            fun asks() = mia.log.count { it.startsWith("THIS PHONE ASKED THE HOUSE TO LET IT GO") }
+            mia.os[DevicePermission.Bluetooth] = Grant.Refused
+            mia.flow.permissionsChecked()
+            until("the house heard Mia's ask") { heard.size == 1 }
+            mia.flow.permissionsChecked()
+            mia.flow.cameBackToTheForeground()
+            delay(SETTLE_MILLIS * 3)
+            assertEquals(1, asks(), "a trigger asked again while the first ask was waiting")
+            assertEquals(ScreenId.Lobby, mia.flow.state.screen, "Mia left the lobby without the house's answer")
+            assertTrue(mia.model.attached != null, "Mia let her seat go without the house's answer")
+            repeat((LET_GO_PATIENCE_MILLIS / 1_000L).toInt()) { mia.flow.secondPassed() }
+            mia.flow.permissionsChecked()
+            assertEquals(2, asks(), "the next trigger after the patience did not ask again")
+            delay(SETTLE_MILLIS * 3)
+            assertEquals(ScreenId.Lobby, mia.flow.state.screen, "Mia left the lobby without the house's answer")
+            assertEquals(4, room.host.model.standing.joined, "the house let Mia's seat go without answering")
+
+            gate.complete(Unit)
+            until("the house's answer walked Mia to PERMISSIONS") { mia.flow.state.screen == ScreenId.Perms }
+            assertEquals(null, mia.model.attached, "RELEASED and Mia still holds the lobby")
+            until("the house dropped Mia from the lobby") { room.host.model.standing.joined == 3 }
+        }
     }
 
     private companion object {
